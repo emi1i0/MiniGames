@@ -64,5 +64,12 @@ export const games: GameEntry[] = [
     path: "/games/sliding-puzzle/",
     accent: "#0ff8ff",
   },
+  {
+    id: "asteroids",
+    title: "Asteroids",
+    description: "Navega con inercia, rota y dispara a rocas que se parten en este clásico juego de disparos espacial.",
+    path: "/games/asteroids/",
+    accent: "#ff3f81",
+  },
 ];
 
