@@ -122,6 +122,7 @@ export class Game {
       const speed = Math.min(BASE_SPEED + this.elapsed * SPEED_RAMP_PER_SEC, MAX_SPEED);
       const dz = speed * dt;
 
+      if (this.input.consumeFlip()) this.player.flip();
       this.player.update(dt, this.input.direction);
       this.tunnel.scroll(dz);
 

@@ -22,4 +22,25 @@ export const games: GameEntry[] = [
     path: "/games/flappy-bird/",
     accent: "#4ec0e6",
   },
+  {
+    id: "stack-tower",
+    title: "Stack Tower",
+    description: "Suelta cada bloque en el momento justo para apilar la torre más alta sin que se te escape.",
+    path: "/games/stack-tower/",
+    accent: "#5ce1a6",
+  },
+  {
+    id: "rhythm-tap",
+    title: "Rhythm Tap",
+    description: "Toca las notas de colores justo al cruzar la línea, encadena combos y sobrevive sin quedarte sin vida.",
+    path: "/games/rhythm-tap/",
+    accent: "#ff3f81",
+  },
+  {
+    id: "jump-ball",
+    title: "Jump Ball",
+    description: "Corre hacia el horizonte saltando solo entre plataformas y cambia de carril a tiempo para no caer al vacío.",
+    path: "/games/jump-ball/",
+    accent: "#ff8a3d",
+  },
 ];

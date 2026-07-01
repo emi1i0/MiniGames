@@ -5,6 +5,7 @@ export class InputController {
   private rightHeld = false;
   private pointerDirection = 0;
   private pointerActive = false;
+  private flipQueued = false;
 
   constructor(target: HTMLElement) {
     this.target = target;
@@ -21,6 +22,13 @@ export class InputController {
     return this.leftHeld ? -1 : 1;
   }
 
+  /** Returns true once per Space press, then clears the pending flip. */
+  consumeFlip(): boolean {
+    if (!this.flipQueued) return false;
+    this.flipQueued = false;
+    return true;
+  }
+
   dispose(): void {
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
@@ -32,6 +40,10 @@ export class InputController {
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.code === "ArrowLeft" || e.code === "KeyA") this.leftHeld = true;
     if (e.code === "ArrowRight" || e.code === "KeyD") this.rightHeld = true;
+    if (e.code === "Space") {
+      if (!e.repeat) this.flipQueued = true;
+      e.preventDefault();
+    }
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {

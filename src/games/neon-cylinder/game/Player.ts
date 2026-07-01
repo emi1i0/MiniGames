@@ -40,6 +40,12 @@ export class Player {
     this.updatePosition();
   }
 
+  /** Instantly jump to the opposite side of the tunnel (half a turn). */
+  flip(): void {
+    this.angle += Math.PI;
+    this.updatePosition();
+  }
+
   private updatePosition(): void {
     this.object.position.x = PLAYER_ORBIT_RADIUS * Math.sin(this.angle);
     this.object.position.y = -PLAYER_ORBIT_RADIUS * Math.cos(this.angle);

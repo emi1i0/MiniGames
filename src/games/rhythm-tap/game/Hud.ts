@@ -1,0 +1,125 @@
+import { MAX_HEALTH } from "./constants";
+import type { Judgment } from "./NoteField";
+
+const JUDGMENT_TEXT: Record<Judgment, string> = {
+  perfect: "PERFECTO",
+  good: "BIEN",
+  miss: "FALLO",
+};
+
+/** DOM overlay: live score / combo / health plus start and game-over screens. */
+export class Hud {
+  private readonly scoreEl: HTMLDivElement;
+  private readonly comboEl: HTMLDivElement;
+  private readonly bestEl: HTMLDivElement;
+  private readonly healthFillEl: HTMLDivElement;
+  private readonly judgmentEl: HTMLDivElement;
+  private readonly overlayEl: HTMLDivElement;
+  private readonly titleEl: HTMLDivElement;
+  private readonly subtitleEl: HTMLDivElement;
+  private readonly scoreLineEl: HTMLDivElement;
+  private readonly hintEl: HTMLDivElement;
+
+  constructor(container: HTMLElement) {
+    const hud = document.createElement("div");
+    hud.className = "hud";
+
+    this.scoreEl = document.createElement("div");
+    this.scoreEl.className = "hud__score";
+    this.scoreEl.textContent = "0";
+
+    this.comboEl = document.createElement("div");
+    this.comboEl.className = "hud__combo";
+
+    this.bestEl = document.createElement("div");
+    this.bestEl.className = "hud__best";
+
+    const healthBar = document.createElement("div");
+    healthBar.className = "hud__health";
+    this.healthFillEl = document.createElement("div");
+    this.healthFillEl.className = "hud__health-fill";
+    healthBar.append(this.healthFillEl);
+
+    this.judgmentEl = document.createElement("div");
+    this.judgmentEl.className = "hud__judgment";
+
+    hud.append(this.scoreEl, this.comboEl, this.bestEl, healthBar, this.judgmentEl);
+
+    this.overlayEl = document.createElement("div");
+    this.overlayEl.className = "overlay";
+
+    this.titleEl = document.createElement("div");
+    this.titleEl.className = "overlay__title";
+
+    this.subtitleEl = document.createElement("div");
+    this.subtitleEl.className = "overlay__subtitle";
+
+    this.scoreLineEl = document.createElement("div");
+    this.scoreLineEl.className = "overlay__score";
+
+    this.hintEl = document.createElement("div");
+    this.hintEl.className = "overlay__hint";
+    this.hintEl.textContent = "teclas D F J K segun la figura  ·  o toca la columna";
+
+    this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
+
+    container.append(hud, this.overlayEl);
+  }
+
+  setScore(score: number): void {
+    this.scoreEl.textContent = String(score);
+  }
+
+  setCombo(combo: number): void {
+    this.comboEl.textContent = combo >= 2 ? `${combo} COMBO` : "";
+  }
+
+  setBest(best: number): void {
+    this.bestEl.textContent = best > 0 ? `MEJOR: ${best}` : "";
+  }
+
+  setHealth(health: number): void {
+    const pct = Math.max(0, Math.min(1, health / MAX_HEALTH));
+    this.healthFillEl.style.width = `${pct * 100}%`;
+    // Fade from green to red as health drops.
+    const hue = pct * 120;
+    this.healthFillEl.style.background = `hsl(${hue}, 85%, 55%)`;
+  }
+
+  /** Flashes the last judgment; retriggers the CSS pop animation. */
+  flashJudgment(judgment: Judgment): void {
+    this.judgmentEl.textContent = JUDGMENT_TEXT[judgment];
+    this.judgmentEl.className = `hud__judgment hud__judgment--${judgment}`;
+    // Force reflow so re-adding the same class restarts the animation.
+    void this.judgmentEl.offsetWidth;
+    this.judgmentEl.classList.add("is-shown");
+  }
+
+  showHud(visible: boolean): void {
+    this.scoreEl.style.visibility = visible ? "visible" : "hidden";
+    this.comboEl.style.visibility = visible ? "visible" : "hidden";
+  }
+
+  showStart(): void {
+    this.titleEl.textContent = "RHYTHM TAP";
+    this.subtitleEl.textContent = "presiona la tecla de cada figura al cruzar la línea";
+    this.scoreLineEl.textContent = "";
+    this.hintEl.style.display = "block";
+    this.overlayEl.classList.remove("hidden");
+  }
+
+  showGameOver(score: number, best: number): void {
+    this.titleEl.textContent = "GAME OVER";
+    this.subtitleEl.textContent = "toca o presiona una tecla para reintentar";
+    this.scoreLineEl.textContent =
+      score >= best && score > 0
+        ? `PUNTAJE: ${score} — ¡NUEVO MEJOR!`
+        : `PUNTAJE: ${score}  ·  MEJOR: ${best}`;
+    this.hintEl.style.display = "none";
+    this.overlayEl.classList.remove("hidden");
+  }
+
+  hide(): void {
+    this.overlayEl.classList.add("hidden");
+  }
+}

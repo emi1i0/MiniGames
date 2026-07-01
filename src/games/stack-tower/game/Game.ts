@@ -1,0 +1,149 @@
+import { MAX_DT, VIEW_HEIGHT, VIEW_WIDTH } from "./constants";
+import { Tower } from "./Tower";
+import { Renderer } from "./Renderer";
+import { InputController } from "./InputController";
+import { Hud } from "./Hud";
+
+type State = "ready" | "playing" | "dead";
+
+const BEST_KEY = "stack-tower:best";
+
+/** Orchestrates canvas, state machine and the fixed-view game loop. */
+export class Game {
+  private readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly tower = new Tower();
+  private readonly renderer = new Renderer();
+  private readonly hud: Hud;
+  private readonly input: InputController;
+
+  private state: State = "ready";
+  private best = Number(localStorage.getItem(BEST_KEY)) || 0;
+  private lastTime = 0;
+  /** Delay before a drop can restart after dying, avoids an instant retry. */
+  private deadFor = 0;
+
+  constructor(container: HTMLElement) {
+    this.canvas = document.createElement("canvas");
+    this.canvas.className = "game-canvas";
+    container.append(this.canvas);
+    this.ctx = this.canvas.getContext("2d")!;
+
+    this.hud = new Hud(container);
+    this.hud.setBest(this.best);
+    this.hud.showScore(false);
+    this.hud.showStart();
+
+    this.tower.reset();
+
+    this.input = new InputController(this.canvas, () => this.onDrop());
+
+    this.resize();
+    window.addEventListener("resize", this.resize);
+
+    this.lastTime = performance.now();
+    requestAnimationFrame(this.tick);
+  }
+
+  private onDrop(): void {
+    switch (this.state) {
+      case "ready":
+        this.start();
+        this.place();
+        break;
+      case "playing":
+        this.place();
+        break;
+      case "dead":
+        if (this.deadFor > 0.5) this.reset();
+        break;
+    }
+  }
+
+  private place(): void {
+    const result = this.tower.drop();
+    if (result === "miss") {
+      this.die();
+      return;
+    }
+    this.hud.setScore(this.tower.score);
+  }
+
+  private start(): void {
+    this.state = "playing";
+    this.hud.setScore(0);
+    this.hud.showScore(true);
+    this.hud.hide();
+  }
+
+  private reset(): void {
+    this.tower.reset();
+    this.state = "ready";
+    this.hud.showScore(false);
+    this.hud.showStart();
+  }
+
+  private die(): void {
+    this.state = "dead";
+    this.deadFor = 0;
+    this.hud.showScore(false);
+    const score = this.tower.score;
+    if (score > this.best) {
+      this.best = score;
+      localStorage.setItem(BEST_KEY, String(this.best));
+      this.hud.setBest(this.best);
+    }
+    this.hud.showGameOver(score, this.best);
+  }
+
+  private tick = (now: number): void => {
+    const dt = Math.min((now - this.lastTime) / 1000, MAX_DT);
+    this.lastTime = now;
+
+    if (this.state === "dead") this.deadFor += dt;
+    this.tower.update(dt);
+    this.render();
+
+    requestAnimationFrame(this.tick);
+  };
+
+  private render(): void {
+    const { ctx } = this;
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    ctx.save();
+    ctx.scale(this.scale, this.scale);
+    ctx.translate(this.offsetX, this.offsetY);
+    // Clip to the fixed view box so blocks/slivers outside it don't paint into
+    // the letterbox side bars on wide windows.
+    ctx.beginPath();
+    ctx.rect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
+    ctx.clip();
+    this.renderer.draw(ctx, this.tower);
+    ctx.restore();
+  }
+
+  // --- Canvas scaling: fit the fixed VIEW box into the window, letterboxed. ---
+  private scale = 1;
+  private offsetX = 0;
+  private offsetY = 0;
+
+  private resize = (): void => {
+    const dpr = window.devicePixelRatio || 1;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    this.canvas.width = Math.floor(w * dpr);
+    this.canvas.height = Math.floor(h * dpr);
+    this.canvas.style.width = `${w}px`;
+    this.canvas.style.height = `${h}px`;
+
+    const fit = Math.min(w / VIEW_WIDTH, h / VIEW_HEIGHT);
+    this.scale = fit * dpr;
+    this.offsetX = (w / fit - VIEW_WIDTH) / 2;
+    this.offsetY = (h / fit - VIEW_HEIGHT) / 2;
+  };
+
+  dispose(): void {
+    window.removeEventListener("resize", this.resize);
+    this.input.dispose();
+  }
+}
