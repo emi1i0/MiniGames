@@ -43,4 +43,19 @@ export const games: GameEntry[] = [
     path: "/games/jump-ball/",
     accent: "#ff8a3d",
   },
+  {
+    id: "reaction-time",
+    title: "Reaction Time",
+    description: "Pon a prueba tus reflejos en este juego de 5 rondas. El puntaje final es tu tiempo de reacción promedio.",
+    path: "/games/reaction-time/",
+    accent: "#39ff14",
+  },
+  {
+    id: "city-bloxx",
+    title: "City Bloxx",
+    description: "Suelta cada piso desde la grúa en el momento justo y levanta el rascacielos más alto sin que el edificio pierda el equilibrio.",
+    path: "/games/city-bloxx/",
+    accent: "#d9843f",
+  },
 ];
+

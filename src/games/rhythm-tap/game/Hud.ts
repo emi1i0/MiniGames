@@ -19,6 +19,7 @@ export class Hud {
   private readonly subtitleEl: HTMLDivElement;
   private readonly scoreLineEl: HTMLDivElement;
   private readonly hintEl: HTMLDivElement;
+  private readonly countdownEl: HTMLDivElement;
 
   constructor(container: HTMLElement) {
     const hud = document.createElement("div");
@@ -63,7 +64,25 @@ export class Hud {
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
 
-    container.append(hud, this.overlayEl);
+    this.countdownEl = document.createElement("div");
+    this.countdownEl.className = "countdown";
+
+    container.append(hud, this.overlayEl, this.countdownEl);
+  }
+
+  /** Shows a countdown label ("3" / "2" / "1" / "YA"), or hides it when null. */
+  showCountdown(text: string | null): void {
+    if (text === null) {
+      this.countdownEl.classList.remove("is-shown");
+      this.countdownEl.textContent = "";
+      return;
+    }
+    if (this.countdownEl.textContent === text) return;
+    this.countdownEl.textContent = text;
+    this.countdownEl.classList.remove("is-shown");
+    // Force reflow so re-adding the class restarts the pop animation.
+    void this.countdownEl.offsetWidth;
+    this.countdownEl.classList.add("is-shown");
   }
 
   setScore(score: number): void {
@@ -102,7 +121,7 @@ export class Hud {
 
   showStart(): void {
     this.titleEl.textContent = "RHYTHM TAP";
-    this.subtitleEl.textContent = "presiona la tecla de cada figura al cruzar la línea";
+    this.subtitleEl.textContent = "presiona ENTER o toca para empezar";
     this.scoreLineEl.textContent = "";
     this.hintEl.style.display = "block";
     this.overlayEl.classList.remove("hidden");
@@ -110,7 +129,7 @@ export class Hud {
 
   showGameOver(score: number, best: number): void {
     this.titleEl.textContent = "GAME OVER";
-    this.subtitleEl.textContent = "toca o presiona una tecla para reintentar";
+    this.subtitleEl.textContent = "presiona ENTER o toca para reintentar";
     this.scoreLineEl.textContent =
       score >= best && score > 0
         ? `PUNTAJE: ${score} — ¡NUEVO MEJOR!`

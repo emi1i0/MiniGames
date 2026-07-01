@@ -6,18 +6,18 @@ export const BALL_RADIUS = 0.55;
 export const LANE_X = 2.0;
 export const LANE_COUNT = 3;
 /** Forward spacing between consecutive platform rows (along Z). */
-export const ROW_DEPTH = 4.0;
+export const ROW_DEPTH = 5.5;
 
 // --- Platforms ---
 export const PLATFORM_WIDTH = 2.7; // along X
-export const PLATFORM_DEPTH = 3.0; // along Z
+export const PLATFORM_DEPTH = 2.2; // along Z
 export const PLATFORM_HEIGHT = 0.7; // top surface sits at y = 0
 /** Probability an off-path lane gets a platform (variety). */
 export const PLATFORM_FILL = 0.5;
 
 // --- Ball motion ---
 /** Peak height of the automatic hop arc above the platform surface. */
-export const HOP_HEIGHT = 1.7;
+export const HOP_HEIGHT = 2.0;
 /** How fast the ball eases toward its target lane (higher = snappier). */
 export const LANE_LERP = 13;
 /** Downward speed once the ball misses a platform and falls, units/s. */

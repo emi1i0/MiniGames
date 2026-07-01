@@ -4,16 +4,14 @@ import {
   BALL_RADIUS,
   FALL_SPEED,
   HOP_HEIGHT,
-  LANE_LERP,
   LANE_X,
+  PLATFORM_WIDTH,
 } from "./constants";
 
 /** The player ball: a solid-colored sphere that hops forward automatically and
- *  is only steered between the three lanes. Owns its own mesh. */
+ *  is steered continuously across the tracks. Owns its own mesh. */
 export class Ball {
   readonly object: THREE.Mesh;
-  /** Discrete target lane, 0 = left, 1 = center, 2 = right. */
-  lane = 1;
 
   constructor() {
     const geometry = new THREE.SphereGeometry(BALL_RADIUS, 32, 24);
@@ -28,25 +26,24 @@ export class Ball {
   }
 
   reset(): void {
-    this.lane = 1;
     this.object.position.set(0, BALL_RADIUS, 0);
   }
 
-  /** Queue a lane change; clamped to the valid lane range. */
-  steer(dir: number): void {
-    this.lane = THREE.MathUtils.clamp(this.lane + Math.sign(dir), 0, 2);
+  /** Steers the ball continuously in the given direction. */
+  steerContinuous(dir: number, dt: number): void {
+    const steerSpeed = 9.5; // units per second
+    this.object.position.x += dir * steerSpeed * dt;
+
+    // Clamp the position so the ball doesn't run off the sides of the track
+    const maxBound = LANE_X + PLATFORM_WIDTH / 2 - BALL_RADIUS;
+    this.object.position.x = THREE.MathUtils.clamp(
+      this.object.position.x,
+      -maxBound,
+      maxBound
+    );
   }
 
-  private laneX(lane: number): number {
-    return (lane - 1) * LANE_X;
-  }
-
-  /** Ease sideways toward the target lane and set the hop height from phase
-   *  (0 = on a platform, 0.5 = apex, 1 = about to land on the next). */
-  update(dt: number, hopPhase: number): void {
-    const targetX = this.laneX(this.lane);
-    const t = Math.min(1, dt * LANE_LERP);
-    this.object.position.x += (targetX - this.object.position.x) * t;
+  update(_dt: number, hopPhase: number): void {
     this.object.position.y = BALL_RADIUS + Math.sin(Math.PI * hopPhase) * HOP_HEIGHT;
   }
 

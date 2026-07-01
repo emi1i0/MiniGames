@@ -4,9 +4,13 @@ import { Renderer } from "./Renderer";
 import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 
-type State = "ready" | "playing" | "dead";
+type State = "ready" | "countdown" | "playing" | "dead";
 
 const BEST_KEY = "stack-tower:best";
+
+/** Countdown before a run starts: one label shown per COUNTDOWN_STEP seconds. */
+const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
+const COUNTDOWN_STEP = 0.75;
 
 /** Orchestrates canvas, state machine and the fixed-view game loop. */
 export class Game {
@@ -22,6 +26,8 @@ export class Game {
   private lastTime = 0;
   /** Delay before a drop can restart after dying, avoids an instant retry. */
   private deadFor = 0;
+  /** Elapsed time in the pre-run countdown. */
+  private countdownTime = 0;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement("canvas");
@@ -48,16 +54,25 @@ export class Game {
   private onDrop(): void {
     switch (this.state) {
       case "ready":
-        this.start();
-        this.place();
+        this.beginCountdown();
         break;
       case "playing":
         this.place();
         break;
       case "dead":
-        if (this.deadFor > 0.5) this.reset();
+        if (this.deadFor > 0.5) this.beginCountdown();
         break;
     }
+  }
+
+  /** Resets the tower and runs the 3-2-1-YA countdown before play begins. */
+  private beginCountdown(): void {
+    this.tower.reset();
+    this.state = "countdown";
+    this.countdownTime = 0;
+    this.hud.showScore(false);
+    this.hud.hide();
+    this.hud.showCountdown(COUNTDOWN_LABELS[0]);
   }
 
   private place(): void {
@@ -74,13 +89,15 @@ export class Game {
     this.hud.setScore(0);
     this.hud.showScore(true);
     this.hud.hide();
+    this.hud.showCountdown(null);
   }
 
-  private reset(): void {
-    this.tower.reset();
-    this.state = "ready";
-    this.hud.showScore(false);
-    this.hud.showStart();
+  /** Advances the countdown, updating the label and starting play when done. */
+  private updateCountdown(dt: number): void {
+    this.countdownTime += dt;
+    const index = Math.floor(this.countdownTime / COUNTDOWN_STEP);
+    if (index >= COUNTDOWN_LABELS.length) this.start();
+    else this.hud.showCountdown(COUNTDOWN_LABELS[index]);
   }
 
   private die(): void {
@@ -101,6 +118,7 @@ export class Game {
     this.lastTime = now;
 
     if (this.state === "dead") this.deadFor += dt;
+    else if (this.state === "countdown") this.updateCountdown(dt);
     this.tower.update(dt);
     this.render();
 

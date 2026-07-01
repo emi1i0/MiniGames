@@ -20,7 +20,11 @@ import {
   SPEED_RAMP_PER_SEC,
 } from "./constants";
 
-type GameState = "ready" | "playing" | "gameover";
+type GameState = "ready" | "countdown" | "playing" | "gameover";
+
+/** Countdown before a run starts: one label shown per COUNTDOWN_STEP seconds. */
+const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
+const COUNTDOWN_STEP = 0.75;
 
 export class Game {
   private readonly scene: THREE.Scene;
@@ -40,6 +44,7 @@ export class Game {
   private score = 0;
   private best = 0;
   private elapsed = 0;
+  private countdownTime = 0;
   private lastTime = performance.now();
 
   constructor(container: HTMLElement) {
@@ -87,8 +92,18 @@ export class Game {
   }
 
   private handleActivate(): void {
-    if (this.state === "playing") return;
-    this.startGame();
+    if (this.state === "playing" || this.state === "countdown") return;
+    this.beginCountdown();
+  }
+
+  /** Resets the run and runs the 3-2-1-YA countdown before play begins. */
+  private beginCountdown(): void {
+    this.player.reset();
+    this.spawner.reset();
+    this.state = "countdown";
+    this.countdownTime = 0;
+    this.hud.hide();
+    this.hud.showCountdown(COUNTDOWN_LABELS[0]);
   }
 
   private startGame(): void {
@@ -98,6 +113,7 @@ export class Game {
     this.elapsed = 0;
     this.hud.setScore(0);
     this.hud.hide();
+    this.hud.showCountdown(null);
     this.state = "playing";
     this.lastTime = performance.now();
   }
@@ -135,6 +151,12 @@ export class Game {
         this.score++;
       }
       this.hud.setScore(this.score);
+    } else if (this.state === "countdown") {
+      this.tunnel.scroll(dt * 4);
+      this.countdownTime += dt;
+      const index = Math.floor(this.countdownTime / COUNTDOWN_STEP);
+      if (index >= COUNTDOWN_LABELS.length) this.startGame();
+      else this.hud.showCountdown(COUNTDOWN_LABELS[index]);
     } else {
       this.tunnel.scroll(dt * 4);
     }

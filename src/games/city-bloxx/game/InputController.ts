@@ -1,11 +1,11 @@
-/** Turns keyboard / mouse / touch into a single "flap" callback. */
+/** Turns keyboard / mouse / touch into a single "drop" callback. */
 export class InputController {
   private readonly target: HTMLElement;
-  private readonly onFlap: () => void;
+  private readonly onDrop: () => void;
 
-  constructor(target: HTMLElement, onFlap: () => void) {
+  constructor(target: HTMLElement, onDrop: () => void) {
     this.target = target;
-    this.onFlap = onFlap;
+    this.onDrop = onDrop;
     window.addEventListener("keydown", this.onKeyDown);
     target.addEventListener("pointerdown", this.onPointerDown);
   }
@@ -16,14 +16,14 @@ export class InputController {
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
-    if (e.code === "Space" || e.code === "ArrowUp" || e.code === "KeyW" || e.code === "Enter") {
+    if (e.code === "Space" || e.code === "ArrowDown" || e.code === "Enter") {
       e.preventDefault();
-      this.onFlap();
+      this.onDrop();
     }
   };
 
   private onPointerDown = (e: PointerEvent): void => {
     e.preventDefault();
-    this.onFlap();
+    this.onDrop();
   };
 }

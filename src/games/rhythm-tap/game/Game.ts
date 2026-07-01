@@ -17,11 +17,14 @@ import { Renderer } from "./Renderer";
 import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 
-type State = "ready" | "playing" | "dead";
+type State = "ready" | "countdown" | "playing" | "dead";
 
 const BEST_KEY = "rhythm-tap:best";
 /** Seconds a lane stays lit after a tap. */
 const LANE_FLASH_TIME = 0.18;
+/** Countdown before a run starts: one label shown per COUNTDOWN_STEP seconds. */
+const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
+const COUNTDOWN_STEP = 0.75;
 
 /** Orchestrates canvas, state machine and the fixed-view game loop. */
 export class Game {
@@ -40,6 +43,8 @@ export class Game {
   private lastTime = 0;
   /** Delay before a tap can restart after dying, avoids an instant retry. */
   private deadFor = 0;
+  /** Elapsed time in the pre-run countdown. */
+  private countdownTime = 0;
   private readonly laneFlash = new Array<number>(LANE_COUNT).fill(0);
 
   constructor(container: HTMLElement) {
@@ -59,6 +64,7 @@ export class Game {
       (figure) => this.onFigure(figure),
       (lane) => this.onLane(lane),
       (clientX) => this.toViewX(clientX),
+      () => this.requestStart(),
     );
 
     this.resize();
@@ -84,15 +90,37 @@ export class Game {
     this.applyJudgment(this.notes.tapLane(lane) ?? "miss");
   }
 
-  /** Resolves start/restart transitions. Returns true when a gameplay tap
-   *  should actually be judged this frame. */
+  /** Resolves start/restart transitions. Returns true only while playing, when
+   *  a gameplay tap should actually be judged. Any tap on a non-playing screen
+   *  just kicks off the countdown instead. */
   private beginInput(): boolean {
-    if (this.state === "dead") {
-      if (this.deadFor > 0.6) this.reset();
-      return false;
-    }
-    if (this.state === "ready") this.start();
-    return true;
+    if (this.state === "playing") return true;
+    this.requestStart();
+    return false;
+  }
+
+  /** Enter or a tap on a start / game-over screen begins the countdown. */
+  private requestStart(): void {
+    if (this.state === "ready") this.beginCountdown();
+    else if (this.state === "dead" && this.deadFor > 0.6) this.beginCountdown();
+  }
+
+  /** Resets the notes and runs the 3-2-1-YA countdown before play begins. */
+  private beginCountdown(): void {
+    this.notes.reset();
+    this.state = "countdown";
+    this.countdownTime = 0;
+    this.hud.showHud(false);
+    this.hud.hide();
+    this.hud.showCountdown(COUNTDOWN_LABELS[0]);
+  }
+
+  /** Advances the countdown, updating the label and starting play when done. */
+  private updateCountdown(dt: number): void {
+    this.countdownTime += dt;
+    const index = Math.floor(this.countdownTime / COUNTDOWN_STEP);
+    if (index >= COUNTDOWN_LABELS.length) this.start();
+    else this.hud.showCountdown(COUNTDOWN_LABELS[index]);
   }
 
   private applyJudgment(judgment: Judgment): void {
@@ -129,13 +157,7 @@ export class Game {
     this.hud.setHealth(this.health);
     this.hud.showHud(true);
     this.hud.hide();
-  }
-
-  private reset(): void {
-    this.notes.reset();
-    this.state = "ready";
-    this.hud.showHud(false);
-    this.hud.showStart();
+    this.hud.showCountdown(null);
   }
 
   private die(): void {
@@ -169,6 +191,7 @@ export class Game {
 
     // Advance the post-death delay so a tap can restart after the guard window.
     if (this.state === "dead") this.deadFor += dt;
+    else if (this.state === "countdown") this.updateCountdown(dt);
 
     if (this.state !== "playing") return;
 

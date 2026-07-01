@@ -128,3 +128,31 @@ body {
   opacity: 0.9;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
 }
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 25;
+  font-size: 150px;
+  font-weight: 700;
+  letter-spacing: 6px;
+  color: #fff;
+  text-shadow: 0 6px 26px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+}
+
+.countdown.is-shown {
+  animation: countdown-pop 0.75s ease-out;
+}
+
+@keyframes countdown-pop {
+  0% { opacity: 0; transform: scale(0.4); }
+  20% { opacity: 1; transform: scale(1.12); }
+  40% { transform: scale(1); }
+  80% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.3); }
+}

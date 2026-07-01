@@ -5,7 +5,6 @@ import {
   PLATFORM_COLOR_A,
   PLATFORM_COLOR_B,
   PLATFORM_DEPTH,
-  PLATFORM_FILL,
   PLATFORM_HEIGHT,
   PLATFORM_WIDTH,
   ROW_DEPTH,
@@ -28,6 +27,7 @@ export class Track {
   private readonly occupancy = new Map<number, boolean[]>();
   private readonly matA: THREE.MeshStandardMaterial;
   private readonly matB: THREE.MeshStandardMaterial;
+  private readonly matWhite: THREE.MeshStandardMaterial;
   private nextIndex = 0;
 
   constructor() {
@@ -37,6 +37,7 @@ export class Track {
 
     this.matA = new THREE.MeshStandardMaterial({ color: PLATFORM_COLOR_A, roughness: 0.85 });
     this.matB = new THREE.MeshStandardMaterial({ color: PLATFORM_COLOR_B, roughness: 0.85 });
+    this.matWhite = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 });
 
     for (let r = 0; r < VISIBLE_ROWS; r++) {
       const group = new THREE.Group();
@@ -84,6 +85,30 @@ export class Track {
     return lanes ? lanes[lane] : true;
   }
 
+  /** Checks if the given X coordinate is on a generated platform at the specified row. */
+  isOnPlatform(index: number, x: number): boolean {
+    const lanes = this.occupancy.get(index);
+    if (!lanes) return true; // defaults to safe
+    for (let lane = 0; lane < 3; lane++) {
+      if (lanes[lane]) {
+        const laneX = (lane - 1) * LANE_X;
+        const halfW = PLATFORM_WIDTH / 2;
+        if (x >= laneX - halfW && x <= laneX + halfW) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  /** Change the material of the platform at (index, lane) to white when landed on. */
+  landOn(index: number, lane: number): void {
+    const row = this.rows.find((r) => r.index === index);
+    if (row && row.tiles[lane]) {
+      row.tiles[lane].material = this.matWhite;
+    }
+  }
+
   private layout(worldScroll: number): void {
     for (const row of this.rows) {
       row.group.position.z = worldScroll - row.index * ROW_DEPTH;
@@ -101,28 +126,15 @@ export class Track {
   }
 
   private generateLanes(index: number): boolean[] {
-    // The very first row is a single centered platform under the ball's start.
-    if (index === 0) return [false, true, false];
-
-    const lanes = [
-      Math.random() < PLATFORM_FILL,
-      Math.random() < PLATFORM_FILL,
-      Math.random() < PLATFORM_FILL,
-    ];
-    if (!lanes.some(Boolean)) lanes[Math.floor(Math.random() * 3)] = true;
-
-    // Guarantee no dead ends: every platform in the previous row must be able to
-    // reach a platform here by moving at most one lane.
-    const prev = this.occupancy.get(index - 1);
-    if (prev) {
-      for (let L = 0; L < 3; L++) {
-        if (!prev[L]) continue;
-        const reach = [L - 1, L, L + 1].filter((l) => l >= 0 && l < 3);
-        if (!reach.some((l) => lanes[l])) {
-          lanes[reach.includes(L) ? L : reach[0]] = true;
-        }
-      }
+    const lanes = [false, false, false];
+    if (index === 0) {
+      lanes[1] = true;
+      return lanes;
     }
+
+    // Pick any of the three lanes randomly (left, center, or right)
+    const chosenLane = Math.floor(Math.random() * 3);
+    lanes[chosenLane] = true;
     return lanes;
   }
 }

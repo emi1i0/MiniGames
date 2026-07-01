@@ -1,7 +1,9 @@
-/** DOM overlay: live score plus start / game-over screens. */
+/** DOM overlay: live floor count, a balance meter, and start / game-over screens. */
 export class Hud {
   private readonly scoreEl: HTMLDivElement;
   private readonly bestEl: HTMLDivElement;
+  private readonly balanceEl: HTMLDivElement;
+  private readonly balanceMarkerEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly titleEl: HTMLDivElement;
   private readonly subtitleEl: HTMLDivElement;
@@ -20,7 +22,13 @@ export class Hud {
     this.bestEl = document.createElement("div");
     this.bestEl.className = "hud__best";
 
-    hud.append(this.scoreEl, this.bestEl);
+    this.balanceEl = document.createElement("div");
+    this.balanceEl.className = "hud__balance";
+    this.balanceMarkerEl = document.createElement("div");
+    this.balanceMarkerEl.className = "hud__balance-marker";
+    this.balanceEl.append(this.balanceMarkerEl);
+
+    hud.append(this.scoreEl, this.bestEl, this.balanceEl);
 
     this.overlayEl = document.createElement("div");
     this.overlayEl.className = "overlay";
@@ -36,7 +44,7 @@ export class Hud {
 
     this.hintEl = document.createElement("div");
     this.hintEl.className = "overlay__hint";
-    this.hintEl.textContent = "espacio / clic / toca para soltar";
+    this.hintEl.textContent = "espacio / clic / toca para soltar el piso";
 
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.hintEl);
 
@@ -69,12 +77,21 @@ export class Hud {
     this.bestEl.textContent = best > 0 ? `MEJOR: ${best}` : "";
   }
 
+  /** Positions the balance marker; ratio in [-1, 1], 0 = centered/stable. */
+  setBalance(ratio: number): void {
+    const pct = 50 + Math.max(-1, Math.min(1, ratio)) * 50;
+    this.balanceMarkerEl.style.left = `${pct}%`;
+    const danger = Math.abs(ratio) > 0.7;
+    this.balanceEl.classList.toggle("is-danger", danger);
+  }
+
   showScore(visible: boolean): void {
     this.scoreEl.style.visibility = visible ? "visible" : "hidden";
+    this.balanceEl.style.visibility = visible ? "visible" : "hidden";
   }
 
   showStart(): void {
-    this.titleEl.textContent = "STACK TOWER";
+    this.titleEl.textContent = "CITY BLOXX";
     this.subtitleEl.textContent = "presiona ENTER o toca para empezar";
     this.scoreLineEl.textContent = "";
     this.hintEl.style.display = "block";
@@ -82,12 +99,12 @@ export class Hud {
   }
 
   showGameOver(score: number, best: number): void {
-    this.titleEl.textContent = "GAME OVER";
+    this.titleEl.textContent = "SE DERRUMBO";
     this.subtitleEl.textContent = "presiona ENTER o toca para reintentar";
     this.scoreLineEl.textContent =
       score >= best && score > 0
-        ? `PUNTAJE: ${score} — ¡NUEVO MEJOR!`
-        : `PUNTAJE: ${score}  ·  MEJOR: ${best}`;
+        ? `PISOS: ${score} — ¡NUEVO MEJOR!`
+        : `PISOS: ${score}  ·  MEJOR: ${best}`;
     this.hintEl.style.display = "none";
     this.overlayEl.classList.remove("hidden");
   }

@@ -9,17 +9,20 @@ export class InputController {
   private readonly onFigure: (figure: number) => void;
   private readonly onLane: (lane: number) => void;
   private readonly toViewX: (clientX: number) => number;
+  private readonly onStart: () => void;
 
   constructor(
     target: HTMLElement,
     onFigure: (figure: number) => void,
     onLane: (lane: number) => void,
     toViewX: (clientX: number) => number,
+    onStart: () => void,
   ) {
     this.target = target;
     this.onFigure = onFigure;
     this.onLane = onLane;
     this.toViewX = toViewX;
+    this.onStart = onStart;
     window.addEventListener("keydown", this.onKeyDown);
     target.addEventListener("pointerdown", this.onPointerDown);
   }
@@ -31,6 +34,11 @@ export class InputController {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
+    if (e.code === "Enter") {
+      e.preventDefault();
+      this.onStart();
+      return;
+    }
     const figure = FIGURE_KEYS.indexOf(e.code);
     if (figure !== -1) {
       e.preventDefault();

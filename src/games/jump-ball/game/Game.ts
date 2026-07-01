@@ -17,13 +17,18 @@ import {
   FOG_FAR,
   FOG_NEAR,
   IDLE_SPEED,
+  LANE_X,
   MAX_DT,
   MAX_SPEED,
   ROW_DEPTH,
   SPEED_RAMP_PER_SEC,
 } from "./constants";
 
-type GameState = "ready" | "playing" | "gameover";
+type GameState = "ready" | "countdown" | "playing" | "gameover";
+
+/** Countdown before a run starts: one label shown per COUNTDOWN_STEP seconds. */
+const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
+const COUNTDOWN_STEP = 0.75;
 
 /** Orchestrates scene / camera / renderer, the chase camera and the game loop. */
 export class Game {
@@ -49,6 +54,7 @@ export class Game {
   private best = 0;
   private lastLandedRow = 0;
   private deadFor = 0;
+  private countdownTime = 0;
   private lastTime = performance.now();
 
   constructor(container: HTMLElement) {
@@ -107,14 +113,38 @@ export class Game {
   }
 
   private handleActivate(): void {
-    if (this.state === "playing") return;
+    if (this.state === "playing" || this.state === "countdown") return;
     if (this.state === "gameover" && this.deadFor < 0.6) return;
-    this.startGame();
+    this.beginCountdown();
+  }
+
+  /** Resets the world and runs the 3-2-1-YA countdown before play begins. */
+  private beginCountdown(): void {
+    this.ball.reset();
+    this.track.reset();
+    this.input.reset();
+    this.worldScroll = 0;
+    this.idleTime = 0;
+    this.track.update(0);
+    this.track.landOn(0, 1);
+    this.state = "countdown";
+    this.countdownTime = 0;
+    this.hud.hide();
+    this.hud.showCountdown(COUNTDOWN_LABELS[0]);
+  }
+
+  private updateCountdown(dt: number): void {
+    this.idleTime += dt;
+    this.ball.idle(this.idleTime);
+    this.countdownTime += dt;
+    const index = Math.floor(this.countdownTime / COUNTDOWN_STEP);
+    if (index >= COUNTDOWN_LABELS.length) this.startGame();
+    else this.hud.showCountdown(COUNTDOWN_LABELS[index]);
   }
 
   private startGame(): void {
     this.ball.reset();
-    this.track.reset();
+    this.input.reset();
     this.worldScroll = 0;
     this.speed = BASE_SPEED;
     this.elapsed = 0;
@@ -122,9 +152,9 @@ export class Game {
     this.lastLandedRow = 0;
     this.deadFor = 0;
     this.input.consumeSteer();
-    this.track.update(0);
     this.hud.setScore(0);
     this.hud.hide();
+    this.hud.showCountdown(null);
     this.state = "playing";
   }
 
@@ -145,6 +175,7 @@ export class Game {
     this.lastTime = now;
 
     if (this.state === "playing") this.updatePlaying(dt);
+    else if (this.state === "countdown") this.updateCountdown(dt);
     else this.updateIdle(dt);
 
     this.updateCamera(dt);
@@ -155,8 +186,10 @@ export class Game {
     this.elapsed += dt;
     this.speed = Math.min(BASE_SPEED + this.elapsed * SPEED_RAMP_PER_SEC, MAX_SPEED);
 
-    const steer = this.input.consumeSteer();
-    if (steer !== 0) this.ball.steer(steer);
+    const steerDir = this.input.getSteerDir();
+    if (steerDir !== 0) {
+      this.ball.steerContinuous(steerDir, dt);
+    }
 
     this.worldScroll += this.speed * dt;
     const hopPhase = this.worldScroll / ROW_DEPTH - Math.floor(this.worldScroll / ROW_DEPTH);
@@ -168,10 +201,17 @@ export class Game {
     const currentRow = Math.floor(this.worldScroll / ROW_DEPTH + 1e-4);
     if (currentRow > this.lastLandedRow) {
       this.lastLandedRow = currentRow;
-      if (!this.track.laneOccupied(currentRow, this.ball.lane)) {
+      if (!this.track.isOnPlatform(currentRow, this.ball.object.position.x)) {
         this.die();
         return;
       }
+      // Determine the closest lane (0, 1, 2) to turn white
+      const closestLane = THREE.MathUtils.clamp(
+        Math.round(this.ball.object.position.x / LANE_X) + 1,
+        0,
+        2
+      );
+      this.track.landOn(currentRow, closestLane);
       this.score = currentRow;
       this.hud.setScore(this.score);
     }

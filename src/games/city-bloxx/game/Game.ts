@@ -1,13 +1,21 @@
-import { GROUND_HEIGHT, MAX_DT, PIPE_SPEED, VIEW_HEIGHT, VIEW_WIDTH } from "./constants";
-import { Bird } from "./Bird";
-import { PipeField } from "./PipeField";
-import { Renderer } from "./Renderer";
+import {
+  CAM_LERP,
+  DROP_GRAVITY,
+  HOOK_FLOAT,
+  HOOK_SCREEN_Y,
+  MAX_DT,
+  VIEW_HEIGHT,
+  VIEW_WIDTH,
+} from "./constants";
+import { Tower } from "./Tower";
+import { Crane } from "./Crane";
+import { Renderer, type BlockView } from "./Renderer";
 import { InputController } from "./InputController";
 import { Hud } from "./Hud";
 
 type State = "ready" | "countdown" | "playing" | "dead";
 
-const BEST_KEY = "flappy-bird:best";
+const BEST_KEY = "city-bloxx:best";
 
 /** Countdown before a run starts: one label shown per COUNTDOWN_STEP seconds. */
 const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];
@@ -17,8 +25,8 @@ const COUNTDOWN_STEP = 0.75;
 export class Game {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private readonly bird = new Bird();
-  private readonly pipes = new PipeField();
+  private readonly tower = new Tower();
+  private readonly crane = new Crane();
   private readonly renderer = new Renderer();
   private readonly hud: Hud;
   private readonly input: InputController;
@@ -26,12 +34,18 @@ export class Game {
   private state: State = "ready";
   private score = 0;
   private best = Number(localStorage.getItem(BEST_KEY)) || 0;
-  private groundScroll = 0;
   private lastTime = 0;
-  /** Delay before flap can restart after dying, avoids an instant retry. */
   private deadFor = 0;
-  /** Elapsed time in the pre-run countdown. */
   private countdownTime = 0;
+
+  /** The block in play (on the hook or falling), or null between spawns. */
+  private block: BlockView | null = null;
+  private blockFalling = false;
+  private blockVx = 0;
+  private blockVy = 0;
+
+  /** Vertical world→screen pan, grows as the tower climbs. */
+  private camY = 0;
 
   constructor(container: HTMLElement) {
     this.canvas = document.createElement("canvas");
@@ -44,8 +58,9 @@ export class Game {
     this.hud.showScore(false);
     this.hud.showStart();
 
-    this.input = new InputController(this.canvas, () => this.onFlap());
+    this.input = new InputController(this.canvas, () => this.onDrop());
 
+    this.resetWorld();
     this.resize();
     window.addEventListener("resize", this.resize);
 
@@ -53,13 +68,17 @@ export class Game {
     requestAnimationFrame(this.tick);
   }
 
-  private onFlap(): void {
+  private onDrop(): void {
     switch (this.state) {
       case "ready":
         this.beginCountdown();
         break;
       case "playing":
-        this.bird.flap();
+        if (this.block && !this.blockFalling) {
+          this.blockFalling = true;
+          this.blockVx = this.crane.vx;
+          this.blockVy = this.crane.vy;
+        }
         break;
       case "dead":
         if (this.deadFor > 0.6) this.beginCountdown();
@@ -67,10 +86,33 @@ export class Game {
     }
   }
 
-  /** Resets the world and runs the 3-2-1-YA countdown before play begins. */
+  /** Resets tower, crane and the current block to a fresh, empty site. */
+  private resetWorld(): void {
+    this.tower.reset();
+    this.crane.reset();
+    this.crane.update(0, 0, this.hangTopY());
+    this.score = 0;
+    this.hud.setScore(0);
+    this.hud.setBalance(0);
+    this.spawnBlock();
+    this.camY = this.cameraTarget();
+  }
+
+  /** Puts a fresh block on the hook at the current landing height. */
+  private spawnBlock(): void {
+    this.block = { x: this.crane.x, topY: this.crane.y };
+    this.blockFalling = false;
+    this.blockVx = 0;
+    this.blockVy = 0;
+  }
+
+  /** Resting top-Y of a hooked block (its landing spot minus the hang gap). */
+  private hangTopY(): number {
+    return this.tower.landingTopY() - HOOK_FLOAT;
+  }
+
   private beginCountdown(): void {
-    this.bird.reset();
-    this.pipes.reset();
+    this.resetWorld();
     this.state = "countdown";
     this.countdownTime = 0;
     this.hud.showScore(false);
@@ -80,8 +122,6 @@ export class Game {
 
   private start(): void {
     this.state = "playing";
-    this.score = 0;
-    this.hud.setScore(0);
     this.hud.showScore(true);
     this.hud.hide();
     this.hud.showCountdown(null);
@@ -99,53 +139,88 @@ export class Game {
     this.hud.showGameOver(this.score, this.best);
   }
 
+  /** Resolves a dropped block: a miss ends the run, a hit stacks and rebalances. */
+  private resolveDrop(): void {
+    const res = this.tower.place(this.block!.x);
+    if (!res.ok) {
+      // No support: let the block keep falling for the death animation.
+      this.die();
+      return;
+    }
+    this.score++;
+    this.hud.setScore(this.score);
+    this.hud.setBalance(this.tower.balanceRatio());
+    if (this.tower.isToppled()) {
+      this.tower.collapse();
+      this.block = null;
+      this.die();
+      return;
+    }
+    this.spawnBlock();
+  }
+
   private tick = (now: number): void => {
     const dt = Math.min((now - this.lastTime) / 1000, MAX_DT);
     this.lastTime = now;
-
     this.update(dt);
     this.render();
-
     requestAnimationFrame(this.tick);
   };
 
   private update(dt: number): void {
     this.renderer.update(dt);
+    this.tower.update(dt);
 
     if (this.state === "playing") {
-      this.groundScroll += PIPE_SPEED * dt;
-      this.bird.update(dt);
-      this.score += this.pipes.update(dt, this.bird.x);
-      this.hud.setScore(this.score);
+      // Always update the crane so it keeps swinging
+      this.crane.update(dt, this.tower.count, this.hangTopY());
 
-      const floor = VIEW_HEIGHT - GROUND_HEIGHT - this.bird.radius;
-      if (this.bird.y >= floor) {
-        this.bird.y = floor;
-        this.die();
-      } else if (this.bird.y - this.bird.radius <= 0 || this.pipes.collides(this.bird)) {
-        this.die();
+      if (this.block && this.blockFalling) {
+        this.blockVy += DROP_GRAVITY * dt;
+        this.block.topY += this.blockVy * dt;
+        this.block.x += this.blockVx * dt;
+        if (this.block.topY >= this.tower.landingTopY()) this.resolveDrop();
+      } else if (this.block) {
+        this.block.x = this.crane.x;
+        this.block.topY = this.crane.y;
       }
+      this.updateCamera(dt);
     } else if (this.state === "ready" || this.state === "countdown") {
-      // Gentle idle bob so the bird reads as alive on the start/countdown screen.
-      this.bird.y = VIEW_HEIGHT * 0.45 + Math.sin(this.lastTime / 260) * 8;
+      // Idle: the hook keeps sweeping so the scene reads as alive.
+      this.crane.update(dt, 0, this.hangTopY());
+      if (this.block) {
+        this.block.x = this.crane.x;
+        this.block.topY = this.crane.y;
+      }
       if (this.state === "countdown") this.updateCountdown(dt);
     } else if (this.state === "dead") {
       this.deadFor += dt;
-      // Let the bird finish falling to the ground after a mid-air death.
-      const floor = VIEW_HEIGHT - GROUND_HEIGHT - this.bird.radius;
-      if (this.bird.y < floor) {
-        this.bird.update(dt);
-        if (this.bird.y > floor) this.bird.y = floor;
+      // Crane keeps swinging while dying
+      this.crane.update(dt, this.tower.count, this.hangTopY());
+      // Let a missed block finish falling off the bottom of the screen.
+      if (this.block && this.blockFalling && this.block.topY < VIEW_HEIGHT + 260) {
+        this.blockVy += DROP_GRAVITY * dt;
+        this.block.topY += this.blockVy * dt;
+        this.block.x += this.blockVx * dt;
       }
     }
   }
 
-  /** Advances the countdown, updating the label and starting play when done. */
   private updateCountdown(dt: number): void {
     this.countdownTime += dt;
     const index = Math.floor(this.countdownTime / COUNTDOWN_STEP);
     if (index >= COUNTDOWN_LABELS.length) this.start();
     else this.hud.showCountdown(COUNTDOWN_LABELS[index]);
+  }
+
+  /** Target pan that pins the hook near the top once the tower is tall. */
+  private cameraTarget(): number {
+    return Math.max(0, HOOK_SCREEN_Y - this.hangTopY());
+  }
+
+  private updateCamera(dt: number): void {
+    const target = this.cameraTarget();
+    this.camY += (target - this.camY) * Math.min(1, CAM_LERP * dt);
   }
 
   private render(): void {
@@ -154,12 +229,18 @@ export class Game {
     ctx.save();
     ctx.scale(this.scale, this.scale);
     ctx.translate(this.offsetX, this.offsetY);
-    // Clip to the fixed view box so pipes scrolling past the left edge don't
-    // linger in the letterbox side bars on wide windows.
     ctx.beginPath();
     ctx.rect(0, 0, VIEW_WIDTH, VIEW_HEIGHT);
     ctx.clip();
-    this.renderer.draw(ctx, this.bird, this.pipes, this.groundScroll);
+    this.renderer.draw(
+      ctx,
+      this.tower,
+      this.crane.x,
+      this.crane.y,
+      this.block,
+      this.hangTopY(),
+      this.camY,
+    );
     ctx.restore();
   }
 
