@@ -178,11 +178,17 @@ export class LeaderboardPanel {
         highlightScore !== undefined &&
         row.score === highlightScore;
       if (isMe) highlighted = true;
-      this.listEl.append(this.buildRow(gameId, row, i + 1, isMe));
+      this.listEl.append(this.buildRow(gameId, row, i + 1, isMe, variant));
     });
   }
 
-  private buildRow(gameId: string, row: ScoreRow, rank: number, isMe: boolean): HTMLLIElement {
+  private buildRow(
+    gameId: string,
+    row: ScoreRow,
+    rank: number,
+    isMe: boolean,
+    variant: string | undefined,
+  ): HTMLLIElement {
     const li = document.createElement("li");
     li.className = "mg-lb__row" + (isMe ? " mg-lb__row--me" : "");
 
@@ -196,7 +202,7 @@ export class LeaderboardPanel {
 
     const valueEl = document.createElement("span");
     valueEl.className = "mg-lb__value";
-    valueEl.textContent = formatScore(gameId, row.score);
+    valueEl.textContent = formatScore(gameId, row.score, variant);
 
     li.append(rankEl, nameEl, valueEl);
     return li;

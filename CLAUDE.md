@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Kunai Throw, and Keepers!), each independently playable, plus a landing page to pick one. Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel).
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Odd One Out, Kunai Throw, Keepers!, and Memoria), each independently playable, plus a landing page to pick one. Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel).
 
 ## Conventions (must follow)
 
@@ -12,12 +12,13 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 
 ## Structure
 
-- `index.html`, `src/main.ts`, `src/style.css` — the landing page. Renders a card per game from `src/games.ts`.
+- `index.html`, `src/main.ts`, `src/style.css` — the landing page. Renders a card per game from `src/games.ts`, plus a "Jugar con amigos" link to `/rooms/` (only when Supabase credentials exist).
 - `src/games.ts` — registry (`GameEntry[]`: `id`, `title`, `description`, `path`, optional `accent` color) the landing page reads. **Every game needs an entry here.**
 - `games/<id>/index.html` — one Vite HTML entry point per game (root-level `games/`, not under `src/`), giving each game a clean URL `/games/<id>/`.
 - `src/games/<id>/` — that game's source (`main.ts`, `style.css`, plus its own submodules, e.g. `game/`).
-- `src/shared/` — cross-cutting leaderboard infra shared by every game and the landing page (see "Global rankings" below). This is the **one** sanctioned shared module; it is not game-engine code.
-- `vite.config.ts` — auto-discovers every `games/*/index.html` via `node:fs` at config-load time and feeds them into `build.rollupOptions.input`. New games are picked up automatically; **no edit needed here** when adding a game.
+- `src/shared/` — cross-cutting leaderboard infra shared by every game and the landing page (see "Global rankings" below), plus `src/shared/room/` (multiplayer rooms, see "Salas" below). This is the **one** sanctioned shared module; it is not game-engine code.
+- `rooms/index.html` + `src/rooms/` — the multiplayer rooms page (create / join / lobby) at `/rooms/`. Not a game, so it lives outside `games/`.
+- `vite.config.ts` — auto-discovers every `games/*/index.html` via `node:fs` at config-load time and feeds them into `build.rollupOptions.input`. New games are picked up automatically; **no edit needed here** when adding a game. The only hand-registered extra entry is `rooms/index.html`.
 - `public/` — static assets shared across all games (favicon, icons).
 - Each game folder under `src/games/<id>/` has its own `CLAUDE.md` with game-specific context (mechanics, gotchas, tuning knobs).
 
@@ -35,7 +36,8 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 4. Add a `CLAUDE.md` inside `src/games/<id>/` documenting that game's mechanics and any non-obvious decisions.
 5. Implement the mandatory Enter-to-start 3 / 2 / 1 / YA countdown (see "Shared UX pattern" below).
 6. Wire the global ranking (see "Global rankings" below): declare the game in `GAME_SCORING` and call `hud.showRanking(...)` on game over.
-7. Run `npm run build` to confirm the new entry is discovered.
+7. Wire the multiplayer room mode (see "Salas (multiplayer rooms)" below): `initRoomMode(<id>, { getScore })` in the constructor, block the restart input on game over when `this.room` is set, and call `this.room.reportScore(score)` instead of `hud.showRanking(...)`.
+8. Run `npm run build` to confirm the new entry is discovered.
 
 Games are intentionally decoupled — no shared game-engine code between them. Don't introduce a shared abstraction across games unless a second game actually needs it. The lone exception is `src/shared/` (global rankings), which is deliberately cross-cutting infra, not gameplay logic.
 
@@ -44,10 +46,10 @@ Games are intentionally decoupled — no shared game-engine code between them. D
 Every game reports its final score to a shared global leaderboard backed by **Supabase** (Postgres + client SDK called straight from the browser with the anon key and Row Level Security — no server code). Lives in `src/shared/`:
 
 - `supabase.ts` — lazy client from `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`; `getSupabase()` returns `null` when unset. `isLeaderboardEnabled()` gates optional UI.
-- `scoring.ts` — `GAME_SCORING[gameId]`: per-game `direction` (`"higher"` = bigger is better, default; `"lower"` for reaction-time and sliding-puzzle), optional `format`, and optional `variants` (independent boards, e.g. sliding-puzzle sizes). **Every game that submits must have an entry here.**
+- `scoring.ts` — `GAME_SCORING[gameId]`: per-game `direction` (`"higher"` = bigger is better, default; `"lower"` for reaction-time and sliding-puzzle), optional `format`, optional `variants` (independent boards, e.g. sliding-puzzle sizes), and optional per-variant overrides `variantDirection` / `variantFormat` (used when one variant sorts/formats differently from the base — e.g. memory-match is `"higher"` for room-mode pairs but its solo `"solo"` board is `"lower"`). `encodeTimeMoves` / `formatTimeMoves` pack completion time + moves into one score (time orders, moves tiebreak) for the sliding-puzzle and memory-match solo boards. **Every game that submits must have an entry here.**
 - `nickname.ts` — anonymous player name in `localStorage` (`mg:nickname`, 1-12 chars).
 - `leaderboard.ts` — `submitScore(gameId, score, { variant })` and `fetchTop(gameId, { variant, limit })`.
-- `LeaderboardPanel.ts` — self-contained DOM component (injects its own CSS once). Prompts for a nickname on the first submit, then shows the Top 10 and highlights the player's row. Reused by each game's game-over overlay and by the landing modal.
+- `LeaderboardPanel.ts` — self-contained DOM component (injects its own CSS once). Prompts for the nickname on every submit, prefilled with the last used name as an editable suggestion; the score is sent only after the player confirms. Then shows the Top 10 and highlights the player's row. Reused by each game's game-over overlay and by the landing modal.
 
 Config & degradation:
 - Credentials go in `.env` (gitignored; see `.env.example`) and in Vercel's env vars. The DB schema is `supabase/schema.sql`.
@@ -55,6 +57,30 @@ Config & degradation:
 - Security note: scores are inserted client-side with the anon key, so they are spoofable — acceptable for minijuegos; move the insert behind a serverless function if it ever matters.
 
 Per-game wiring: each `Game.ts` calls `this.hud.showRanking(<id>, score[, size])` right after saving the local best in its game-over handler; each `Hud` mounts a `LeaderboardPanel` in its overlay, exposes `showRanking(...)`, and calls `leaderboard.clear()` in `showStart`. Landing (`src/main.ts`) adds a per-card "Ranking" button that opens a read-only modal (with a variant selector for games that declare `variants`).
+
+## Salas (multiplayer rooms)
+
+Party mode: a host creates a room (short shareable code), friends join, and everyone plays the same minigame simultaneously on their own device; each round awards points by placement (1st of N players gets N points, direction-aware via `GAME_SCORING`), with a cumulative scoreboard and a winner at the end. Room settings (host): number of rounds or an explicit playlist, plus a per-round time limit; without a playlist, after each round players vote the next game among 3 random not-yet-played candidates. In the lobby the host sees the settings form (shared `buildSettingsForm` in `src/rooms/main.ts`) and can re-pick games/rounds/time before every match — each change is saved via `updateSettings` and pinged live to the others, who see a read-only summary. The room survives the final board: the host's "Jugar otra vez" (`resetRoom`) wipes rounds/scores/votes and sends everyone back to the lobby with the same players, where new games can be chosen for the rematch; registered players can rejoin even a finished room, only brand-new players are rejected until it returns to the lobby. Design doc: `docs/salas-plan.md`.
+
+Architecture (Supabase, no server code):
+- **Postgres is the source of truth** — tables `rooms`, `room_players`, `room_rounds`, `room_round_scores`, `room_votes` in `supabase/rooms.sql` (run it in the SQL Editor besides `schema.sql`). Durable state is what makes rejoin and page navigation work: every game is its own HTML entry, so navigating drops the Realtime channel and each page reconnects + refetches.
+- **Realtime channel per room** (`room:<CODE>`) with presence (key = nickname) and a single broadcast event `sync` meaning "re-read the DB" (write -> ping -> refetch, plus a 5 s poll fallback). No `postgres_changes`.
+- **Host-authoritative**: only the host writes phase transitions (start/close round, open vote, finish); players write only their own rows. Points are computed client-side by the pure functions in `points.ts`. If the host disappears >20 s in a stable phase, anyone can take over.
+- Same spoofable trust level as `scores` (anon key + open RLS policies) — accepted and documented in the SQL.
+
+Files in `src/shared/room/`: `types.ts` (types + settings constants), `api.ts` (CRUD, no-op without credentials), `channel.ts` (`RoomChannel`), `points.ts` (`rankRound` / `computeTotals`, pure), `RoomOverlay.ts` (self-contained fixed full-screen DOM overlay: waiting / results / voting / final + top strip), `roomMode.ts` (orchestrator + the per-game contract), `matchState.ts` (generic shared-board match state, see below).
+
+**Shared-board games** (all players see and act on the same board, e.g. Memoria): durable per-round game state lives in `room_match_state` (one jsonb row per room+round, `supabase/rooms.sql`), accessed via `matchState.ts` (`fetchMatchState` / `createMatchState` / `updateMatchState` with an optimistic `version` column: writes carry the version they read; on conflict the caller refetches). Same write -> ping -> refetch pattern as everything else — good enough for turn-based games (~200-400 ms per move), not for real-time ones. For these games `RoomMode` exposes extra context (`code`, `me`, `round()`, `players()`, `isHost()`, `ping()`, `onSync()`); the host creates the initial board and unblocks AFK turns, the turn player writes moves (single atomic UPDATE resolving the whole attempt), and page reloads re-attach by refetching. `resetRoom` also wipes `room_match_state`.
+
+Per-game wiring (the only game-side code, ~4 lines in each `Game.ts`, `Hud.ts` untouched):
+- `private readonly room = initRoomMode("<id>", { getScore: () => this.score });` in the constructor. Returns `null` without `?room=` in the URL or without Supabase — zero impact outside room mode.
+- In the game-over restart input path: `if (this.room) return;` (one run per round; the overlay covers the game's own game-over screen).
+- In the game-over handler: `if (this.room) this.room.reportScore(score); else this.hud.showRanking(...)`. Room scores are **not** sent to the global leaderboard (timeout-cut runs would pollute it).
+- `getScore` is the live score for the timeout partial. Special cases: reaction-time reports the average of completed rounds; sliding-puzzle is fixed to 4x4 in room mode (`ROOM_VARIANTS`) and hides its size selector; memory-match swaps its solo time-attack for a shared turn-based board (see its `CLAUDE.md`) and scores "own pairs".
+
+Setup note: the rooms schema (including `room_match_state`) is `supabase/rooms.sql`; re-run it in the Supabase SQL Editor after pulling changes that touch it (statements are idempotent).
+
+Degradation matches the leaderboard: without credentials the landing button and `/rooms/` UI don't function and every game behaves exactly as before.
 
 ## Shared UX pattern: Enter-to-start countdown
 

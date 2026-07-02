@@ -27,3 +27,7 @@ ends. A near-perfect drop keeps the full width. Plain 2D `<canvas>`, no Three.js
 **Enter-to-start countdown.** From the start or game-over screen, Enter (or a tap / space) enters a `countdown` state that shows 3 / 2 / 1 / YA (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP` seconds each, in `Game.ts`) before play begins. The block keeps sliding during the countdown (visual only) but drops are ignored until it finishes — so, unlike before, the first input no longer drops the first block, it only starts the countdown. `Hud.showCountdown(text | null)` renders the big centered label (styled by `.countdown` in `style.css`).
 
 **Restart guard.** After a miss there's a short `deadFor` delay before a drop can restart, so the tap that ended the run doesn't instantly begin a new one.
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("stack-tower", { getScore: () => this.tower.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.

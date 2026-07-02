@@ -247,7 +247,7 @@ function openRankingModal(game: GameEntry): void {
   const scoring = getScoring(game.id);
   variantBar.innerHTML = "";
 
-  if (scoring.variants && scoring.variants.length > 0) {
+  if (scoring.variants && scoring.variants.length > 1) {
     variantBar.style.display = "flex";
     scoring.variants.forEach((variant, idx) => {
       const btn = document.createElement("button");
@@ -263,8 +263,9 @@ function openRankingModal(game: GameEntry): void {
     });
     void modalPanel.render(game.id, { variant: scoring.variants[0] });
   } else {
+    // Sin variantes, o una sola (p.ej. memory-match "solo"): sin barra de tabs.
     variantBar.style.display = "none";
-    void modalPanel.render(game.id, {});
+    void modalPanel.render(game.id, { variant: scoring.variants?.[0] });
   }
 
   modalEl.classList.add("is-open");

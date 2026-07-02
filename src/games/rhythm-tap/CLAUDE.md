@@ -31,3 +31,7 @@ Three-lane note-tapping game. Pieces of four **figures** (circle, triangle, diam
 **`dt` is clamped** (`MAX_DT`) so a tab-switch or hitch can't integrate one giant step and teleport notes through the hit line.
 
 **Enter-to-start countdown.** From the start or game-over screen, Enter (via the new `onStart` callback in `InputController`) or a figure-key / column tap enters a `countdown` state that shows 3 / 2 / 1 / YA (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP` seconds each, in `Game.ts`) before play begins. `beginInput()` now returns `true` only while playing, so taps on a non-playing screen just kick off the countdown instead of being judged. `Hud.showCountdown(text | null)` renders the big centered label (styled by `.countdown` in `style.css`).
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("rhythm-tap", { getScore: () => this.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.

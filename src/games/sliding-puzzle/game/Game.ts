@@ -8,6 +8,7 @@ import {
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
 import { initRoomMode, ROOM_VARIANTS, type RoomMode } from "../../../shared/room/roomMode";
+import { encodeTimeMoves } from "../../../shared/scoring";
 
 type State = "ready" | "countdown" | "playing" | "victory";
 
@@ -35,9 +36,11 @@ export class Game {
     this.hud = new Hud(container);
     this.hud.showStart(this.handleSelectSize);
 
-    // Parcial por timeout: movimientos hechos (points.ts sabe que un parcial
-    // "lower" sin resolver no es comparable con una victoria).
-    this.room = initRoomMode("sliding-puzzle", { getScore: () => this.moves });
+    // Parcial por timeout: tiempo + movimientos codificados (points.ts sabe que
+    // un parcial "lower" sin resolver no es comparable con una victoria).
+    this.room = initRoomMode("sliding-puzzle", {
+      getScore: () => encodeTimeMoves(this.elapsedTime, this.moves),
+    });
     if (this.room) {
       // En sala todos juegan el mismo tablero: tamano fijo, sin selector.
       this.size = parseInt(ROOM_VARIANTS["sliding-puzzle"], 10);
@@ -283,8 +286,11 @@ export class Game {
       bestTime,
       this.size
     );
-    if (this.room) this.room.reportScore(this.moves);
-    else this.hud.showRanking("sliding-puzzle", this.moves, this.size);
+    // El ranking global se ordena por tiempo; el puntaje enviado codifica el
+    // tiempo (orden) junto con los movimientos (desempate / se muestran al lado).
+    const rankedScore = encodeTimeMoves(this.elapsedTime, this.moves);
+    if (this.room) this.room.reportScore(rankedScore);
+    else this.hud.showRanking("sliding-puzzle", rankedScore, this.size);
   }
 
   private tick = (now: number): void => {

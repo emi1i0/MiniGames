@@ -27,3 +27,7 @@ Controls: left/right (arrows or A/D, plus pointer) steer the orbit; **Space inst
 **Enter-to-start countdown:** from the start or game-over screen, Enter / space (wired in `Hud`) or a pointer tap enters a `countdown` state that shows 3 / 2 / 1 / YA (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP` seconds each, in `Game.ts`) before play begins; the tunnel keeps its idle scroll during the countdown and steering/flip input is ignored until it finishes. `Hud.showCountdown(text | null)` renders the big centered label (styled by `.countdown` in `style.css`).
 
 **Headless/Playwright testing:** the game's internal `elapsed` clock (in `Game.ts`'s `tick()`) can diverge significantly from real wall-clock time under CDP automation, since `tick()` clamps `dt` to 0.05s/frame and headless rendering can run far below 60fps. Don't assume `loop_iteration * nominal_step_ms ≈ game elapsed time`. Read the game's actual internal state instead (e.g. temporarily expose `window.__game = this` in the `Game` constructor, pull fields via `page.evaluate()`, remove the hook before finishing).
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("neon-cylinder", { getScore: () => this.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.
