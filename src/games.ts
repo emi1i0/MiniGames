@@ -96,6 +96,14 @@ export const games: GameEntry[] = [
     category: "Arcade",
   },
   {
+    id: "car-race",
+    title: "Neon Drift",
+    description: "Carrera 2D en circuitos neón: 5 pistas, mapa aleatorio y los autos de todos los jugadores en vivo.",
+    path: "/games/car-race/",
+    accent: "#00f0ff",
+    category: "Carreras",
+  },
+  {
     id: "kunai-throw",
     title: "Kunai Strike",
     description: "Arroja kunais y clávalos en el tronco que gira sin que un kunai golpee a otro.",
