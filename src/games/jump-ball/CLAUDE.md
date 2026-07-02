@@ -74,3 +74,7 @@ before play begins. During the countdown the ball idle-bobs and the track is
 frozen (no scroll) so `worldScroll` / `lastLandedRow` don't drift; `startGame()`
 resets them to 0 at the transition. `Hud.showCountdown(text | null)` renders the
 big centered label (styled by `.countdown` in `style.css`).
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("jump-ball", { getScore: () => this.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.

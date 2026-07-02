@@ -24,3 +24,7 @@ Classic side-scroller: a bird holds a fixed X while gravity pulls it down; each 
 **Restart guard.** After dying there's a short `deadFor` delay before a flap can restart, so the tap that killed you doesn't instantly begin a new run. The bird keeps falling to the ground during the game-over screen for polish.
 
 **Enter-to-start countdown.** From the start or game-over screen, Enter (or a tap / space) enters a `countdown` state that shows 3 / 2 / 1 / YA (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP` seconds each, in `Game.ts`) before play begins; the bird just idle-bobs and gameplay input is ignored until it finishes. The first input only starts the countdown — it no longer also flaps. `Hud.showCountdown(text | null)` renders the big centered label (styled by `.countdown` in `style.css`).
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("flappy-bird", { getScore: () => this.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.

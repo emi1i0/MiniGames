@@ -47,3 +47,7 @@ To prevent loading slow or heavy `.mp3` assets, sound effects (mechanical click 
 
 **Global ranking (per size, fewer moves wins)**
 Registered in `GAME_SCORING` (see root `CLAUDE.md`) with `direction: "lower"` and `variants: ["3", "4", "5"]`, so each board size has its own independent leaderboard. `handleVictory()` submits the move count via `hud.showRanking("sliding-puzzle", moves, size)` (variant = board size). Only **moves** are ranked globally in v1; the best **time** stays a local-only secondary metric (still tracked per size in localStorage).
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("sliding-puzzle", { getScore: () => this.moves })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the board size is fixed to 4x4 (`ROOM_VARIANTS["sliding-puzzle"]`) and the size selector is hidden so everyone solves the same puzzle; `handleVictory()` reports the move count to the room instead of the global ranking and the Enter-to-retry on victory is blocked (one run per round). The timeout partial is the current move count with `finished=false` — since this game is `direction: "lower"`, `points.ts` treats unsolved partials as non-comparable and ranks them behind every solved board.

@@ -28,3 +28,7 @@ Nokia-style tower builder. A hook sweeps horizontally across the top carrying th
 **`dt` is clamped** (`MAX_DT`) so a tab-switch or hitch can't integrate one giant step and teleport a falling block through the stack.
 
 **Enter-to-start countdown.** From the start or game-over screen, Enter / tap / space enters a `countdown` state showing 3 / 2 / 1 / YA (`COUNTDOWN_LABELS`, `COUNTDOWN_STEP` seconds each) before play begins; the hook idle-sweeps and drop input is ignored until it finishes. After dying there's a short `deadFor` guard so the killing tap doesn't instantly restart.
+
+## Room mode (multiplayer)
+
+Wired to the shared party mode: the constructor calls `initRoomMode("city-bloxx", { getScore: () => this.score })` (see root `CLAUDE.md`, "Salas (multiplayer rooms)"). With `?room=` in the URL the game-over reports the score to the room instead of the global ranking, and the restart input is blocked (one run per round). Without the param nothing changes.
