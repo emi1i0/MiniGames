@@ -82,3 +82,7 @@ export function formatRoundTimeLimit(sec: number): string {
 }
 export const DEFAULT_TOTAL_ROUNDS = 5;
 export const TOTAL_ROUNDS_OPTIONS = [3, 5, 7] as const;
+
+/** Tope de jugadores por sala. Se rechaza a los jugadores nuevos al llegar a
+ * este numero; los ya registrados siempre pueden reingresar (rejoin). */
+export const MAX_ROOM_PLAYERS = 8;

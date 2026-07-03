@@ -23,6 +23,7 @@ import {
   DEFAULT_ROUND_TIME_LIMIT,
   DEFAULT_TOTAL_ROUNDS,
   formatRoundTimeLimit,
+  MAX_ROOM_PLAYERS,
   ROUND_TIME_LIMIT_OPTIONS,
   TOTAL_ROUNDS_OPTIONS,
   type RoomSettings,
@@ -460,6 +461,10 @@ async function joinFlow(
   // reentrar al tablero final; los nuevos esperan a que vuelva al lobby.
   if (state.room.status === "finished" && !state.players.includes(player)) {
     return "Esa sala ya termino.";
+  }
+  // Tope de jugadores: solo bloquea a los nuevos; los ya registrados reingresan.
+  if (!state.players.includes(player) && state.players.length >= MAX_ROOM_PLAYERS) {
+    return `La sala esta llena (maximo ${MAX_ROOM_PLAYERS}).`;
   }
 
   // Nick ya registrado: es rejoin valido solo si nadie mas esta conectado con
