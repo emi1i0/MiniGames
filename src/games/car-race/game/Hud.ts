@@ -17,6 +17,8 @@ export class Hud {
   private overlayStat1El!: HTMLElement;
   private overlayStat2El!: HTMLElement;
   private overlayButtonEl!: HTMLButtonElement;
+  private mapsEl!: HTMLElement;
+  private mapChips: HTMLElement[] = [];
   private readonly leaderboard = new LeaderboardPanel();
 
   constructor(container: HTMLElement, onAction: () => void) {
@@ -55,6 +57,7 @@ export class Hud {
       <div class="overlay__card">
         <h1 class="overlay__title" id="overlay-title">NEON DRIFT</h1>
         <p class="overlay__subtitle" id="overlay-subtitle"></p>
+        <div class="overlay__maps" id="overlay-maps"></div>
         <div class="overlay__stats">
           <div class="overlay__stat">
             <span class="hud__label">Tiempo</span>
@@ -68,7 +71,7 @@ export class Hud {
         <button class="overlay__button" id="overlay-button">JUGAR</button>
         <div class="overlay__instructions">
           <b>Flechas</b> o <b>WASD</b>: acelerar, frenar y doblar.<br>
-          En móviles usa los controles táctiles. Salir del asfalto te frena.
+          En móviles usa los controles táctiles. Las paredes te mantienen en pista.
         </div>
       </div>
     `;
@@ -79,6 +82,7 @@ export class Hud {
     this.overlayStat2El = this.overlayEl.querySelector("#overlay-stat-2")!;
     this.overlayButtonEl = this.overlayEl.querySelector("#overlay-button")!;
     this.overlayButtonEl.addEventListener("click", onAction);
+    this.mapsEl = this.overlayEl.querySelector("#overlay-maps")!;
 
     this.leaderboard.mount(this.overlayEl.querySelector(".overlay__card")!);
     this.leaderboard.clear();
@@ -119,6 +123,36 @@ export class Hud {
     }
   }
 
+  /** Crea los chips de seleccion de circuito con miniatura del trazado. */
+  buildMapSelector(
+    tracks: { name: string; accent: string; d: string }[],
+    onSelect: (idx: number) => void,
+  ): void {
+    this.mapsEl.innerHTML = `<span class="overlay__maps-label">Elegí circuito</span>`;
+    const row = document.createElement("div");
+    row.className = "overlay__maps-row";
+    this.mapChips = tracks.map((t, i) => {
+      const chip = document.createElement("button");
+      chip.className = "map-chip";
+      chip.style.setProperty("--chip-accent", t.accent);
+      chip.innerHTML = `
+        <svg class="map-chip__svg" viewBox="0 0 100 62" aria-hidden="true">
+          <path d="${t.d}" fill="none" stroke="${t.accent}" stroke-width="5"
+                stroke-linejoin="round" stroke-linecap="round" />
+        </svg>
+        <span class="map-chip__name">${t.name}</span>`;
+      chip.addEventListener("click", () => onSelect(i));
+      row.append(chip);
+      return chip;
+    });
+    this.mapsEl.append(row);
+  }
+
+  /** Marca el circuito activo en el selector. */
+  setSelectedMap(idx: number): void {
+    this.mapChips.forEach((chip, i) => chip.classList.toggle("selected", i === idx));
+  }
+
   setLap(lap: number, total: number): void {
     this.lapEl.textContent = `${Math.min(lap, total)}/${total}`;
   }
@@ -155,13 +189,19 @@ export class Hud {
 
   showStart(trackName: string, laps: number, bestText: string): void {
     this.overlayTitleEl.textContent = "NEON DRIFT";
-    this.overlaySubtitleEl.textContent = `Circuito: ${trackName} · ${laps} vueltas. Completa la carrera en el menor tiempo posible.`;
+    this.setStartInfo(trackName, laps, bestText);
     this.overlayStat1El.textContent = "-";
-    this.overlayStat2El.textContent = bestText;
     this.overlayButtonEl.textContent = "JUGAR";
     this.overlayButtonEl.style.display = "";
+    this.mapsEl.classList.remove("hidden");
     this.leaderboard.clear();
     this.overlayEl.classList.remove("hidden");
+  }
+
+  /** Refresca circuito elegido: subtitulo + record (sin tocar el resto). */
+  setStartInfo(trackName: string, laps: number, bestText: string): void {
+    this.overlaySubtitleEl.textContent = `Circuito: ${trackName} · ${laps} vueltas. Completá la carrera en el menor tiempo posible.`;
+    this.overlayStat2El.textContent = bestText;
   }
 
   showGameOver(timeText: string, bestText: string, isRecord: boolean, allowRetry: boolean): void {
@@ -176,9 +216,9 @@ export class Hud {
     this.overlayEl.classList.remove("hidden");
   }
 
-  /** Ranking global (solo fuera del modo sala). */
-  showRanking(gameId: string, score: number): void {
-    void this.leaderboard.render(gameId, { score });
+  /** Ranking global por circuito (solo fuera del modo sala). */
+  showRanking(gameId: string, score: number, variant?: string): void {
+    void this.leaderboard.render(gameId, { score, variant });
   }
 
   hideOverlay(): void {

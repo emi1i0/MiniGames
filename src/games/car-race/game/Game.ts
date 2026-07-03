@@ -4,18 +4,33 @@ import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 import { getSupabase } from "../../../shared/supabase";
 import { Car, type CarInput } from "./Car";
 import {
+  BARRIER_RESTITUTION,
   BEST_KEY,
+  CAR_LENGTH,
+  CAR_RADIUS,
+  CAR_WIDTH,
+  CONE_HIT_COOLDOWN_MS,
+  CONE_SLOW,
   MAX_DT,
   NET_SEND_MS,
   REMOTE_STALE_MS,
+  WALL_MARGIN,
+  WALL_RESTITUTION,
   colorFor,
   formatRaceTime,
   hashStr,
 } from "./constants";
 import { Hud } from "./Hud";
+import {
+  BARRIER_HALF_THICK,
+  BOOST_RADIUS,
+  CONE_RADIUS,
+  buildObstacles,
+  type Obstacles,
+} from "./obstacles";
 import { RaceChannel } from "./RaceChannel";
-import { Renderer, type RemoteCar } from "./Renderer";
-import { TRACK_DEFS, buildTrack, type Track } from "./tracks";
+import { Renderer, type RemoteCar, type Skid } from "./Renderer";
+import { TRACK_DEFS, buildTrack, trackPreview, type Track } from "./tracks";
 
 type State = "loading" | "ready" | "countdown" | "racing" | "finished";
 
@@ -32,6 +47,12 @@ export class Game {
   private readonly roomCode: string | null;
 
   private track!: Track;
+  private selectedTrack = 0;
+  private obstacles: Obstacles = { cones: [], barriers: [], boosts: [] };
+  /** Marcas de derrape (se desvanecen). Indices de boost sobre los que estoy. */
+  private readonly skids: Skid[] = [];
+  private readonly insideBoost = new Set<number>();
+  private prevRear: { lx: number; ly: number; rx: number; ry: number } | null = null;
   private state: State = "loading";
   private readonly me: string;
   private readonly myColor: string;
@@ -47,7 +68,8 @@ export class Game {
   private lap = 0;
   private prevS = 0;
   private sectors = [false, false, false];
-  private best = Number(localStorage.getItem(BEST_KEY)) || 0;
+  /** Mejor tiempo local del circuito actual (se recarga en setupTrack). */
+  private best = 0;
 
   private readonly keys: CarInput = { up: false, down: false, left: false, right: false };
   private lastTime = 0;
@@ -69,6 +91,14 @@ export class Game {
 
     this.room = initRoomMode("car-race", { getScore: () => Math.round(this.elapsedMs()) });
 
+    // Selector de circuito: solo en modo solo (en sala el mapa es fijo por seed).
+    if (!this.room) {
+      this.hud.buildMapSelector(
+        TRACK_DEFS.map((_, i) => trackPreview(i)),
+        (idx) => this.onSelectMap(idx),
+      );
+    }
+
     window.addEventListener("keydown", (e) => this.onKey(e, true));
     window.addEventListener("keyup", (e) => this.onKey(e, false));
     this.resize();
@@ -87,11 +117,15 @@ export class Game {
    */
   private async boot(): Promise<void> {
     let trackIdx = Math.floor(Math.random() * TRACK_DEFS.length);
+    let obstacleSeed = (Math.random() * 0xffffffff) >>> 0;
 
     if (this.roomCode && getSupabase()) {
       const state = await fetchRoomState(this.roomCode);
       const round = state?.room.current_round ?? 0;
-      trackIdx = hashStr(`${this.roomCode}:${round}`) % TRACK_DEFS.length;
+      // Seed determinista de sala: mismo circuito y mismos obstaculos para todos.
+      const seed = hashStr(`${this.roomCode}:${round}`);
+      trackIdx = seed % TRACK_DEFS.length;
+      obstacleSeed = seed;
 
       this.channel = new RaceChannel(this.roomCode, round);
       this.channel.onPos((p) => {
@@ -125,7 +159,7 @@ export class Game {
       });
     }
 
-    this.setupTrack(trackIdx);
+    this.setupTrack(trackIdx, obstacleSeed);
 
     if (this.room) {
       // En sala la carrera arranca sola: todos cargan casi a la vez y el
@@ -134,18 +168,39 @@ export class Game {
     } else {
       this.state = "ready";
       this.hud.showStart(this.track.def.name, this.track.def.laps, this.bestText());
+      this.hud.setSelectedMap(this.selectedTrack);
     }
   }
 
-  private setupTrack(trackIdx: number): void {
-    this.track = buildTrack(trackIdx);
+  /** Arma circuito y obstaculos: indice de pista + seed del layout de hazards. */
+  private setupTrack(trackIdx: number, obstacleSeed: number): void {
+    this.selectedTrack = ((trackIdx % TRACK_DEFS.length) + TRACK_DEFS.length) % TRACK_DEFS.length;
+    this.track = buildTrack(this.selectedTrack);
+    this.obstacles = buildObstacles(this.track, hashStr(`obs:${obstacleSeed}`));
+    this.best = Number(localStorage.getItem(this.bestKey())) || 0;
     this.hud.setTrackName(`${this.track.def.name} · ${this.track.def.laps} vueltas`);
     this.hud.setLap(1, this.track.def.laps);
     this.hud.setTime(formatRaceTime(0));
     this.placeAtGrid();
   }
 
-  /** Grilla de largada: detras de la meta, con offset lateral estable por nick. */
+  /**
+   * Elegir un circuito desde el menu (solo modo solo). Reconstruye la pista con
+   * un layout de obstaculos nuevo y refresca el overlay para previsualizarla.
+   */
+  private onSelectMap(idx: number): void {
+    if (this.room || (this.state !== "ready" && this.state !== "finished")) return;
+    this.setupTrack(idx, (Math.random() * 0xffffffff) >>> 0);
+    this.hud.setStartInfo(this.track.def.name, this.track.def.laps, this.bestText());
+    this.hud.setSelectedMap(this.selectedTrack);
+  }
+
+  /** Clave de localStorage del mejor tiempo, por circuito. */
+  private bestKey(): string {
+    return `${BEST_KEY}:${this.track.def.id}`;
+  }
+
+  /** Grilla de largada + reseteo del estado de carrera y de la camara. */
   private placeAtGrid(): void {
     const start = this.track.pointAt(1 - 60 / this.track.total);
     const lane = ((hashStr(this.me) % 5) - 2) * (this.track.def.width / 6.5);
@@ -154,17 +209,18 @@ export class Game {
     this.prevS = this.track.progressAt(this.car.x, this.car.y).s;
     this.lap = 0;
     this.sectors = [false, false, false];
+    this.skids.length = 0;
+    this.insideBoost.clear();
+    this.prevRear = null;
+    this.renderer.snapCamera();
   }
 
   private onAction(): void {
     // En modo sala se corre una sola carrera por ronda: sin reintento.
     if (this.room) return;
     if (this.state === "ready" || this.state === "finished") {
-      // Al reintentar toca un circuito aleatorio nuevo; el primer arranque
-      // usa el que ya se anuncio en el overlay.
-      if (this.state === "finished") {
-        this.setupTrack(Math.floor(Math.random() * TRACK_DEFS.length));
-      }
+      // Corre el circuito elegido en el menu (mismo que se previsualiza).
+      this.placeAtGrid();
       this.hud.hideOverlay();
       this.beginCountdown();
     }
@@ -179,7 +235,7 @@ export class Game {
   private go(): void {
     this.state = "racing";
     this.startTime = performance.now();
-    this.hud.showCountdown("¡YA!", this.track.def.accent);
+    this.hud.showCountdown("¡YA!", this.track.theme.accent);
     window.setTimeout(() => this.hud.hideCountdown(), 700);
   }
 
@@ -250,9 +306,12 @@ export class Game {
         this.viewW,
         this.viewH,
         this.track,
+        this.obstacles,
+        this.skids,
         this.car,
         this.myColor,
         [...this.remotes.values()],
+        dt,
       );
     }
 
@@ -269,7 +328,7 @@ export class Game {
       if (this.countdownLeft <= 0) {
         this.go();
       } else {
-        this.hud.showCountdown(String(Math.ceil(this.countdownLeft)), this.track.def.accent);
+        this.hud.showCountdown(String(Math.ceil(this.countdownLeft)), this.track.theme.accent);
       }
       return;
     }
@@ -283,11 +342,16 @@ export class Game {
         left: this.keys.left || this.hud.touchInput.left,
         right: this.keys.right || this.hud.touchInput.right,
       };
-      const { dist } = this.track.progressAt(this.car.x, this.car.y);
+      const { dist } = this.track.progressAt(this.car.x, this.car.y, this.prevS);
       this.car.update(dt, input, dist <= this.track.def.width / 2);
+      this.applyWalls();
+      this.handleCollisions(dt);
+      this.recordSkids(dt);
       this.trackLapProgress();
       this.hud.setTime(formatRaceTime(this.elapsedMs()));
       this.hud.setLap(this.lap + 1, this.track.def.laps);
+    } else {
+      this.decaySkids(dt);
     }
 
     this.updatePosition();
@@ -296,7 +360,7 @@ export class Game {
 
   /** Vueltas con checkpoints: hay que pasar los 3 sectores antes de la meta. */
   private trackLapProgress(): void {
-    const { s } = this.track.progressAt(this.car.x, this.car.y);
+    const { s } = this.track.progressAt(this.car.x, this.car.y, this.prevS);
 
     if (s > 0.2 && s < 0.4) this.sectors[0] = true;
     if (this.sectors[0] && s > 0.45 && s < 0.65) this.sectors[1] = true;
@@ -329,10 +393,133 @@ export class Game {
     const isRecord = this.best === 0 || ms < this.best;
     if (isRecord) {
       this.best = ms;
-      localStorage.setItem(BEST_KEY, String(this.best));
+      localStorage.setItem(this.bestKey(), String(this.best));
     }
     this.hud.showGameOver(formatRaceTime(ms), this.bestText(), isRecord, true);
-    this.hud.showRanking("car-race", ms);
+    // Ranking por circuito: cada pista tiene su propia tabla (variante).
+    this.hud.showRanking("car-race", ms, this.track.def.id);
+  }
+
+  // ---------- Obstaculos y derrape ----------
+
+  /**
+   * Paredes en el borde del asfalto: si el auto se pasa del ancho de la pista,
+   * lo empuja de vuelta y anula la velocidad hacia afuera. Asi no se puede
+   * cortar por el pasto ni meterse en el hueco entre dos tramos cercanos.
+   */
+  private applyWalls(): void {
+    const prog = this.track.progressAt(this.car.x, this.car.y, this.prevS);
+    const limit = this.track.def.width / 2 - WALL_MARGIN;
+    if (prog.dist <= limit) return;
+    const cp = this.track.pointAt(prog.s);
+    let nx = this.car.x - cp.x;
+    let ny = this.car.y - cp.y;
+    const d = Math.hypot(nx, ny) || 1;
+    nx /= d;
+    ny /= d;
+    this.car.x = cp.x + nx * limit;
+    this.car.y = cp.y + ny * limit;
+    // Pared: la normal (nx,ny) apunta HACIA AFUERA del asfalto. Hay que anular
+    // la velocidad que empuja hacia afuera (vn > 0); si el auto ya va hacia
+    // adentro (vn < 0) no se toca, para que pueda despegarse de la pared.
+    // (Es la convencion opuesta a Car.bounce, pensada para obstaculos.)
+    const vn = this.car.vx * nx + this.car.vy * ny;
+    if (vn > 0) {
+      const j = (1 + WALL_RESTITUTION) * vn;
+      this.car.vx -= j * nx;
+      this.car.vy -= j * ny;
+    }
+  }
+
+  /** Colisiones del auto propio con boosts, barreras y conos. */
+  private handleCollisions(dt: number): void {
+    const car = this.car;
+
+    // Boost pads: envion al entrar (flanco de subida), no cada frame.
+    const boostR2 = (BOOST_RADIUS * 0.6) * (BOOST_RADIUS * 0.6);
+    this.obstacles.boosts.forEach((b, i) => {
+      const inside = (car.x - b.x) ** 2 + (car.y - b.y) ** 2 < boostR2;
+      if (inside && !this.insideBoost.has(i)) {
+        car.applyBoost();
+        this.insideBoost.add(i);
+      } else if (!inside && this.insideBoost.has(i)) {
+        this.insideBoost.delete(i);
+      }
+    });
+
+    // Barreras: capsula (segmento + grosor); empuje fuera + rebote.
+    const minD = CAR_RADIUS + BARRIER_HALF_THICK;
+    for (const b of this.obstacles.barriers) {
+      const cos = Math.cos(b.angle);
+      const sin = Math.sin(b.angle);
+      let along = (car.x - b.x) * cos + (car.y - b.y) * sin;
+      along = Math.max(-b.half, Math.min(b.half, along));
+      const segX = b.x + cos * along;
+      const segY = b.y + sin * along;
+      let nx = car.x - segX;
+      let ny = car.y - segY;
+      let d = Math.hypot(nx, ny);
+      if (d >= minD) continue;
+      if (d < 0.001) {
+        nx = -sin;
+        ny = cos;
+        d = 1;
+      }
+      nx /= d;
+      ny /= d;
+      car.x += nx * (minD - d);
+      car.y += ny * (minD - d);
+      car.bounce(nx, ny, BARRIER_RESTITUTION);
+    }
+
+    // Conos: frenada breve (con cooldown) y golpe visual.
+    const coneR = CAR_RADIUS + CONE_RADIUS * 0.55;
+    const now = performance.now();
+    for (const c of this.obstacles.cones) {
+      const dx = car.x - c.x;
+      const dy = car.y - c.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 < coneR * coneR && now - c.hitAt > CONE_HIT_COOLDOWN_MS) {
+        car.slowDown(CONE_SLOW);
+        c.hitAt = now;
+        const d = Math.sqrt(d2) || 1;
+        c.ox -= (dx / d) * 12;
+        c.oy -= (dy / d) * 12;
+      }
+      // El cono golpeado vuelve lentamente a su lugar.
+      c.ox *= Math.exp(-4 * dt);
+      c.oy *= Math.exp(-4 * dt);
+    }
+  }
+
+  /** Registra marcas de goma cuando el auto derrapa; siempre desvanece. */
+  private recordSkids(dt: number): void {
+    this.decaySkids(dt);
+    const car = this.car;
+    const cos = Math.cos(car.angle);
+    const sin = Math.sin(car.angle);
+    const rearX = -CAR_LENGTH / 2 + 6;
+    const toWorld = (px: number, py: number) => ({
+      x: car.x + cos * px - sin * py,
+      y: car.y + sin * px + cos * py,
+    });
+    const l = toWorld(rearX, -CAR_WIDTH / 2);
+    const r = toWorld(rearX, CAR_WIDTH / 2);
+
+    const drifting = car.slip > 45 && Math.abs(car.speed) > 60;
+    if (drifting && this.prevRear) {
+      this.skids.push({ x1: this.prevRear.lx, y1: this.prevRear.ly, x2: l.x, y2: l.y, alpha: 1 });
+      this.skids.push({ x1: this.prevRear.rx, y1: this.prevRear.ry, x2: r.x, y2: r.y, alpha: 1 });
+      if (this.skids.length > 600) this.skids.splice(0, this.skids.length - 600);
+    }
+    this.prevRear = drifting ? { lx: l.x, ly: l.y, rx: r.x, ry: r.y } : null;
+  }
+
+  private decaySkids(dt: number): void {
+    for (let i = this.skids.length - 1; i >= 0; i--) {
+      this.skids[i].alpha -= dt * 0.25;
+      if (this.skids[i].alpha <= 0) this.skids.splice(i, 1);
+    }
   }
 
   // ---------- Red ----------

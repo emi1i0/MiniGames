@@ -34,6 +34,17 @@ export const GAME_SCORING: Record<string, GameScoring> = {
   },
   "car-race": {
     direction: "lower",
+    // Un ranking independiente por circuito (variante = id de la pista).
+    variants: ["monaco", "shanghai", "silverstone", "red-dune", "glacier-loop", "magma-eight"],
+    variantLabel: (v) =>
+      ({
+        monaco: "Mónaco",
+        shanghai: "Shanghái",
+        silverstone: "Silverstone",
+        "red-dune": "Duna Roja",
+        "glacier-loop": "Glaciar",
+        "magma-eight": "Volcán",
+      })[v] ?? v,
     format: (n) => {
       const m = Math.floor(n / 60000);
       const s = Math.floor((n % 60000) / 1000);

@@ -1,20 +1,49 @@
-/** Fisica del auto (unidades: px, segundos, radianes). */
-export const ACCEL = 560;
-export const BRAKE_DECEL = 900;
-export const MAX_SPEED = 430;
-export const MAX_REVERSE = 130;
-/** Freno natural por rodadura (proporcional a la velocidad). */
-export const DRAG = 0.6;
+/** Fisica del auto (unidades: px, segundos, radianes). Modelo de velocidad
+ *  vectorial con agarre lateral: alto grip (trazada limpia) y solo un derrape
+ *  sutil a alta velocidad. */
+export const ENGINE_ACCEL = 640;
+export const BRAKE_DECEL = 1050;
+export const MAX_SPEED = 470;
+export const MAX_REVERSE = 150;
+/** Rozamiento longitudinal (proporcional a la velocidad de avance). */
+export const ROLL_DRAG = 0.7;
+
+/** Agarre lateral: tasa de decaimiento (1/s) de la velocidad transversal.
+ *  Alto = el auto "muerde" el asfalto y casi no patina. */
+export const GRIP_ON = 9.5;
+export const GRIP_OFF = 3.0;
+/** A tope de velocidad el grip baja esta fraccion, dando un derrape leve. */
+export const GRIP_SPEED_FALLOFF = 0.32;
+
 /** Velocidad de giro maxima, alcanzada a velocidad media. */
-export const TURN_RATE = 2.9;
+export const TURN_RATE = 3.0;
 /** Velocidad a la que la direccion ya responde al 100%. */
 export const TURN_FULL_SPEED = 150;
-/** Multiplicadores fuera del asfalto (pasto). */
-export const OFFTRACK_SPEED_FACTOR = 0.38;
-export const OFFTRACK_DRAG = 3.2;
 
-export const CAR_LENGTH = 36;
-export const CAR_WIDTH = 19;
+/** Multiplicadores fuera del asfalto (pasto/arena). */
+export const OFFTRACK_SPEED_FACTOR = 0.42;
+export const OFFTRACK_ACCEL_FACTOR = 0.5;
+
+/** Boost pads: empuje extra (suave, no instantaneo), tope extra y duracion. */
+export const BOOST_ACCEL = 1200;
+export const BOOST_MAX_BONUS = 220;
+export const BOOST_DURATION = 1.3;
+
+/** Conos: frenada al golpearlos y ventana para no encadenar frenadas. */
+export const CONE_SLOW = 0.6;
+export const CONE_HIT_COOLDOWN_MS = 350;
+
+/** Barreras: restitucion del rebote (0 = pega y se queda, 1 = rebote total). */
+export const BARRIER_RESTITUTION = 0.4;
+
+/** Paredes al borde del asfalto: mantienen el auto en pista (no hay pasto). */
+export const WALL_MARGIN = 8;
+export const WALL_RESTITUTION = 0.25;
+
+export const CAR_LENGTH = 38;
+export const CAR_WIDTH = 20;
+/** Radio de colision del auto (aprox. como circulo). */
+export const CAR_RADIUS = 15;
 
 export const MAX_DT = 0.05;
 

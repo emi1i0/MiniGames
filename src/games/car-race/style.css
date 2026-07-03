@@ -204,6 +204,80 @@ body {
   line-height: 1.5;
 }
 
+.overlay__maps {
+  width: 100%;
+  margin-bottom: 24px;
+}
+
+.overlay__maps.hidden {
+  display: none;
+}
+
+.overlay__maps-label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  margin-bottom: 10px;
+}
+
+.overlay__maps-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.map-chip {
+  --chip-accent: #00f0ff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 96px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px 6px 7px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.map-chip__svg {
+  width: 100%;
+  height: 46px;
+  opacity: 0.85;
+}
+
+.map-chip__name {
+  line-height: 1.1;
+}
+
+.map-chip:hover {
+  color: #ffffff;
+  border-color: var(--chip-accent);
+}
+
+.map-chip:hover .map-chip__svg {
+  opacity: 1;
+}
+
+.map-chip.selected {
+  color: #ffffff;
+  border-color: var(--chip-accent);
+  background: color-mix(in srgb, var(--chip-accent) 16%, transparent);
+  box-shadow: 0 0 16px -2px var(--chip-accent);
+}
+
+.map-chip.selected .map-chip__svg {
+  opacity: 1;
+}
+
 .overlay__stats {
   display: flex;
   justify-content: space-around;

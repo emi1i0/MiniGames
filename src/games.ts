@@ -98,7 +98,7 @@ export const games: GameEntry[] = [
   {
     id: "car-race",
     title: "Neon Drift",
-    description: "Carrera 2D en circuitos neón: 5 pistas, mapa aleatorio y los autos de todos los jugadores en vivo.",
+    description: "Carrera 2D de drift: 6 circuitos (Mónaco, Shanghái, Silverstone y más) con boosts, conos y barreras, ranking por pista y salas online.",
     path: "/games/car-race/",
     accent: "#00f0ff",
     category: "Carreras",
