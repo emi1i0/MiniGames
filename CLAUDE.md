@@ -9,6 +9,7 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 - **Never add yourself (Claude) as a co-author on commits.** Do not append `Co-Authored-By` trailers or any AI attribution to commit messages.
 - **Use the installed `threejs-*` skills when building 3D games.** For any game using Three.js (scenes, cameras, geometry, materials, lighting, textures, animation, model loaders, shaders, postprocessing, raycasting/interaction), consult the matching `threejs-*` skill for accurate APIs and patterns instead of relying on memory.
 - **Every game must have the Enter-to-start 3 / 2 / 1 / YA countdown.** No game may jump straight from the start / game-over screen into play — it must go through the shared countdown described below. New games are required to implement it.
+- **This repo uses Git Flow.** Branch off `develop` for work: features on `feature/*`, releases on `release/*`, hotfixes on `hotfix/*`. `main` holds only tagged releases; `develop` is the integration branch. Do not commit straight to `main` or `develop` — merge via the appropriate branch.
 
 ## Structure
 
