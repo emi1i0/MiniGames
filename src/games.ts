@@ -171,6 +171,14 @@ export const games: GameEntry[] = [
     category: "Arcade",
   },
   {
+    id: "blind-time",
+    title: "Crono Ciego",
+    description: "Detén el cronómetro a ciegas lo más cerca posible del tiempo objetivo asignado.",
+    path: "/games/blind-time/",
+    accent: "#ffdd53",
+    category: "Precisión",
+  },
+  {
     id: "shell-game",
     title: "El Trile",
     description: "Sigue con la mirada el vaso que oculta la moneda. !Cada nivel mezcla mas rapido, hace mas pases y agrega mas vasos!",
