@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "shell-game",
@@ -8,4 +9,9 @@ export const meta: GameEntry = {
   accent: "#ffdd53",
   category: "Reflejos",
   order: 210,
+};
+
+export const scoring: GameScoring = {
+  direction: "higher",
+  format: (n) => `Nivel ${n}`,
 };

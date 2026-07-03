@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "blind-time",
@@ -8,4 +9,9 @@ export const meta: GameEntry = {
   accent: "#ffdd53",
   category: "Precisión",
   order: 200,
+};
+
+export const scoring: GameScoring = {
+  direction: "lower",
+  format: (n) => `${Math.round(n)} ms`,
 };

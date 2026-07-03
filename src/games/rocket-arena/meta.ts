@@ -1,4 +1,5 @@
 import type { GameEntry } from "../../games";
+import type { GameScoring } from "../../shared/scoring-core";
 
 export const meta: GameEntry = {
   id: "rocket-arena",
@@ -10,4 +11,9 @@ export const meta: GameEntry = {
   order: 170,
   // Oculto temporalmente por errores: no aparece en la landing ni en las salas.
   hidden: true,
+};
+
+export const scoring: GameScoring = {
+  direction: "higher",
+  format: (n) => `${n} ${n === 1 ? "gol" : "goles"}`,
 };
