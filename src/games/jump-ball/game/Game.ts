@@ -209,6 +209,9 @@ export class Game {
     const steerDir = this.input.getSteerDir();
     if (steerDir !== 0) {
       this.ball.steerContinuous(steerDir, dt);
+    } else {
+      const pointerTargetX = this.input.getPointerTargetX();
+      if (pointerTargetX !== null) this.ball.steerToward(pointerTargetX, dt);
     }
 
     this.worldScroll += this.speed * dt;

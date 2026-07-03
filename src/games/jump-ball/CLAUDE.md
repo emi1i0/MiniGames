@@ -17,8 +17,11 @@ Built with **Three.js** (see the repo's `threejs-*` skills).
 - `game/Track.ts` — the streaming stepping-stone track: a pool of platform rows
   that scroll toward the camera and recycle to the back, plus lane-occupancy
   generation and the `laneOccupied(row, lane)` query.
-- `game/InputController.ts` — keyboard + pointer → discrete lane-change steps
-  (`consumeSteer`) and an `onAnyInput` start/restart signal.
+- `game/InputController.ts` — steering input plus an `onAnyInput` start/restart
+  signal. Keyboard: hold Left/A or Right/D (`getSteerDir` returns -1/0/1).
+  Mouse/touch: the ball follows the cursor's horizontal position
+  (`getPointerTargetX` maps screen X to a target lane X; screen edges map to the
+  outer lanes). Keyboard steering takes priority over the pointer in `Game.ts`.
 - `game/Hud.ts` — DOM overlay (live score, start / game-over screens).
 - `game/SoundEffects.ts` — synthesized Web Audio effects (bounce on each
   landing, descending swoop on the death-fall), no assets.

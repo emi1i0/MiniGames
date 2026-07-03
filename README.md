@@ -32,7 +32,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Crono Ciego | Precisión | Detené el cronómetro a ciegas lo más cerca del tiempo objetivo. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | El Trile | Reflejos | Seguí con la mirada el vaso que oculta la moneda. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | PONG | Arcade | Pong clásico de un jugador: devolvé la pelota, la velocidad sube y tenés una sola vida. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
-| Block Paddle | Arcade | Moví la barra para que la pelota no caiga; cada rebote suma y acelera. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
+| Block Paddle | Arcade | Mové la barra para que la pelota no caiga; cada rebote acelera. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 
 ## Empezar
 

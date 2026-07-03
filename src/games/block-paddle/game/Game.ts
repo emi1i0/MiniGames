@@ -86,7 +86,7 @@ export class Game {
     this.canvas.addEventListener("mousemove", (e) => {
       if (this.state !== "playing" && this.state !== "countdown") return;
       const rect = this.canvas.getBoundingClientRect();
-      const mx = (e.clientX - rect.left) / this.scale - this.offsetX;
+      const mx = (e.clientX - rect.left) / this.cssScale - this.offsetX;
       this.paddleX = mx - PADDLE_WIDTH / 2;
       this.clampPaddle();
     });
@@ -96,7 +96,7 @@ export class Game {
       e.preventDefault();
       const rect = this.canvas.getBoundingClientRect();
       const touch = e.touches[0];
-      const mx = (touch.clientX - rect.left) / this.scale - this.offsetX;
+      const mx = (touch.clientX - rect.left) / this.cssScale - this.offsetX;
       this.paddleX = mx - PADDLE_WIDTH / 2;
       this.clampPaddle();
     }, { passive: false });
@@ -307,6 +307,8 @@ export class Game {
   }
 
   private scale = 1;
+  /** CSS pixels per view unit (scale without dpr), for mapping pointer input. */
+  private cssScale = 1;
   private offsetX = 0;
   private offsetY = 0;
 
@@ -321,6 +323,7 @@ export class Game {
 
     const fit = Math.min(w / VIEW_WIDTH, h / VIEW_HEIGHT);
     this.scale = fit * dpr;
+    this.cssScale = fit;
     this.offsetX = (w / fit - VIEW_WIDTH) / 2;
     this.offsetY = (h / fit - VIEW_HEIGHT) / 2;
   };

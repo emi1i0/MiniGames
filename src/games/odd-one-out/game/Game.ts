@@ -15,6 +15,7 @@ import {
   MIN_DELTA,
   BASE_SATURATION,
   BASE_LIGHTNESS,
+  GAME_OVER_REVEAL_MS,
 } from "./constants";
 import { Hud } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
@@ -143,7 +144,8 @@ export class Game {
     SoundEffects.playGameOver();
     this.timeLeft = 0;
     this.hud.updateTime(0);
-    this.hud.clearBoard();
+    // Revela cual era la ficha distinta antes de tapar el tablero con el overlay.
+    this.hud.revealOdd(this.oddIndex);
 
     let isNewBest = false;
     if (this.best === null || this.score > this.best) {
@@ -152,10 +154,14 @@ export class Game {
       isNewBest = true;
     }
     this.hud.updateBest(this.best);
-    this.hud.showGameOver(this.score, isNewBest, this.best, this.room !== null);
 
-    if (this.room) this.room.reportScore(this.score);
-    else this.hud.showRanking("odd-one-out", this.score);
+    window.setTimeout(() => {
+      this.hud.clearBoard();
+      this.hud.showGameOver(this.score, isNewBest, this.best!, this.room !== null);
+
+      if (this.room) this.room.reportScore(this.score);
+      else this.hud.showRanking("odd-one-out", this.score);
+    }, GAME_OVER_REVEAL_MS);
   }
 
   private tick = (now: number): void => {

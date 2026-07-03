@@ -152,6 +152,38 @@ export class Hud {
     this.coinEl.classList.add("hidden");
   }
 
+  /**
+   * Fade the current board out (used to cross-dissolve between rounds so the old
+   * cups do not snap away). Resolves once the fade finishes; no-ops instantly
+   * when the board is already empty (e.g. first level).
+   */
+  fadeOutBoard(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.cupsContainerEl.children.length === 0) {
+        resolve();
+        return;
+      }
+      this.cupsContainerEl.classList.add("board-faded");
+      this.coinEl.classList.add("board-faded");
+      setTimeout(resolve, 350);
+    });
+  }
+
+  /** Mark a freshly built board as hidden so it can be faded in. */
+  hideBoardForFade(): void {
+    this.cupsContainerEl.classList.add("board-faded");
+    this.coinEl.classList.add("board-faded");
+  }
+
+  /** Fade the board back in after it was rebuilt. */
+  revealBoard(): void {
+    // Flush the faded (opacity 0) state before clearing it, otherwise adding and
+    // removing the class in the same tick cancels out and the fade never runs.
+    void this.cupsContainerEl.offsetWidth;
+    this.cupsContainerEl.classList.remove("board-faded");
+    this.coinEl.classList.remove("board-faded");
+  }
+
   updateStats(level: number): void {
     this.levelEl.textContent = `NIVEL: ${level}`;
   }

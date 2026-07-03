@@ -143,6 +143,27 @@ body {
   display: flex;
   align-items: flex-end;
   z-index: 1;
+  transition: opacity 0.35s ease;
+}
+
+/* Faded state used to cross-dissolve the board between rounds instead of
+   snapping the old cups away and popping the new ones in. */
+.cups-container.board-faded,
+.coin.board-faded {
+  opacity: 0;
+}
+
+/* Snapshot of the previous round's cups kept on screen while the new board is
+   rebuilt, so the two crossfade (old fades out as new fades in) with no blank
+   frame in between. Sits above the real cups-container while it fades out. */
+.board-ghost {
+  transition: opacity 0.35s ease;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.board-ghost.board-faded {
+  opacity: 0;
 }
 
 /* Cups Positioning and Styles */
@@ -278,7 +299,7 @@ body {
   height: var(--coin-size);
   bottom: 24px; /* Sits on the table, roughly at cup-mouth level */
   z-index: 1; /* Sits behind the cups */
-  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.35s ease;
   transform: translateX(-50%); /* Centered on slot */
 }
 

@@ -1,6 +1,6 @@
 # PONG
 
-Single-player classic Pong: the player controls a paddle on the left with up/down arrows (or W/S); the ball bounces between paddles. Each time the player returns the ball the score increments and the ball speeds up (`BALL_SPEED_INCREMENT` per hit, capped at `BALL_SPEED_MAX`). Missing the ball ends the run (1 life). When the ball passes the AI's right edge it resets to the center and serves back toward the player — score keeps climbing. Plain 2D `<canvas>`, no Three.js.
+Single-player classic Pong: the player controls a paddle on the left with the mouse (the paddle follows the cursor's Y), up/down arrows, or W/S; the ball bounces between paddles. Each time the player returns the ball the score increments and the ball speeds up (`BALL_SPEED_INCREMENT` per hit, capped at `BALL_SPEED_MAX`). Missing the ball ends the run (1 life). When the ball passes the AI's right edge it resets to the center and serves back toward the player — score keeps climbing. Plain 2D `<canvas>`, no Three.js.
 
 ## Module layout
 
@@ -10,7 +10,7 @@ Single-player classic Pong: the player controls a paddle on the left with up/dow
 - `game/Ball.ts` — ball physics (speed, angle, wall bounce, paddle bounce with angle-from-impact-position, speed ramp per hit).
 - `game/Ai.ts` — computer opponent: follows the ball's Y with a configurable `AI_MARGIN` dead zone and slightly slower speed than the player.
 - `game/Renderer.ts` — all canvas drawing: dark background, glowing white paddles/ball with `shadowBlur`, dashed center line.
-- `game/InputController.ts` — keyboard (up/down arrows or W/S for movement, Enter/Space for action) + pointer (tap for action, movement via keys only). Exposes `moveDir` for the game loop to read.
+- `game/InputController.ts` — keyboard (up/down arrows or W/S for movement, Enter/Space for action) + pointer (tap/click for action). Exposes `moveDir` / `p1Dir` / `p2Dir` for the game loop to read. **Mouse paddle-follow lives in `Game.ts`, not here**: a `pointermove` listener maps the cursor Y into view space (via `cssScale`, the dpr-free letterbox factor) and `movePlayer()` centers the local paddle on it whenever no movement key is held. Works in solo, vs-AI and both room-mode sides.
 - `game/Hud.ts` — DOM overlay (score, start / game-over screens, countdown).
 - `game/SoundEffects.ts` — synthesized Web Audio effects (no assets): paddle hit blip, wall bounce tick, score chime, lose swoop, countdown tick.
 - `game/constants.ts` — all tunable values (speeds, sizes, margins, acceleration). **Tune here first.**

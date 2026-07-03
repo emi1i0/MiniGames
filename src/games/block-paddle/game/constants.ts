@@ -10,8 +10,8 @@ export const BALL_RADIUS = 8;
 export const PLAYER_SPEED = 500;
 
 export const BALL_SPEED_INITIAL = 400;
-export const BALL_SPEED_INCREMENT = 20;
-export const BALL_SPEED_MAX = 900;
+export const BALL_SPEED_INCREMENT = 40;
+export const BALL_SPEED_MAX = 950;
 
 export const MAX_DT = 0.032;
 

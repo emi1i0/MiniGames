@@ -67,6 +67,11 @@ export class Game {
   private countdownTime = 0;
   private lastCountdownIndex = -1;
 
+  /** Mouse/touch follow: view-space Y the local paddle centers on, or inactive
+   *  until the pointer is first used (keyboard-only players stay unaffected). */
+  private pointerActive = false;
+  private pointerTargetY = VIEW_HEIGHT / 2;
+
   constructor(container: HTMLElement) {
     this.canvas = document.createElement("canvas");
     this.canvas.className = "game-canvas";
@@ -84,13 +89,17 @@ export class Game {
     this.isRoomMode = this.room !== null;
 
     this.hud.setHintText(
-      this.isRoomMode ? "esperando emparejamiento…" : "flechas / W S para mover",
+      this.isRoomMode ? "esperando emparejamiento…" : "mouse / flechas / W S para mover",
     );
 
     this.input = new InputController(
       container,
       () => this.onAction(),
     );
+
+    // El mouse (y el arrastre tactil) mueve la paleta local: sigue la Y del
+    // cursor. El teclado tiene prioridad cuando hay una tecla apretada.
+    this.canvas.addEventListener("pointermove", this.onPointerMove);
 
     this.resize();
     window.addEventListener("resize", this.resize);
@@ -153,8 +162,8 @@ export class Game {
 
     this.hud.setHintText(
       this.hasOpponent
-        ? this.amPlayer1 ? "W/S — sos J1 (izquierda)" : "FLECHAS — sos J2 (derecha)"
-        : "flechas / W S para mover (vs IA)",
+        ? this.amPlayer1 ? "mouse / W S — sos J1 (izquierda)" : "mouse / FLECHAS — sos J2 (derecha)"
+        : "mouse / flechas / W S para mover (vs IA)",
     );
     this.rolesReady = true;
   }
@@ -242,17 +251,32 @@ export class Game {
     }
   }
 
+  /** Moves a local paddle: keyboard direction when held, else follow the mouse. */
+  private movePlayer(paddle: Paddle, dir: number, dt: number): void {
+    if (dir !== 0) {
+      paddle.y += dir * PLAYER_SPEED * dt;
+      paddle.clamp();
+    } else if (this.pointerActive) {
+      paddle.y = this.pointerTargetY - PADDLE_HEIGHT / 2;
+      paddle.clamp();
+    }
+  }
+
+  private onPointerMove = (e: PointerEvent): void => {
+    const rect = this.canvas.getBoundingClientRect();
+    this.pointerTargetY = (e.clientY - rect.top) / this.cssScale - this.offsetY;
+    this.pointerActive = true;
+  };
+
   private updateSolo(dt: number): void {
-    this.player.y += this.input.moveDir * PLAYER_SPEED * dt;
-    this.player.clamp();
+    this.movePlayer(this.player, this.input.moveDir, dt);
     this.ai.update(dt, this.ball);
     this.ball.update(dt);
     this.checkCollisions();
   }
 
   private updateUnpaired(dt: number): void {
-    this.player.y += this.input.moveDir * PLAYER_SPEED * dt;
-    this.player.clamp();
+    this.movePlayer(this.player, this.input.moveDir, dt);
     this.ai.update(dt, this.ball);
     this.ball.update(dt);
     this.checkCollisionsRoom();
@@ -268,8 +292,7 @@ export class Game {
     this.smoothOpponentPaddle(dt);
 
     if (this.amPlayer1) {
-      this.player.y += this.input.p1Dir * PLAYER_SPEED * dt;
-      this.player.clamp();
+      this.movePlayer(this.player, this.input.p1Dir, dt);
       this.aiPaddle.y = this.opponentPaddleY;
       this.ball.update(dt);
       this.checkCollisionsRoom();
@@ -288,8 +311,7 @@ export class Game {
       }
     } else {
       this.player.y = this.opponentPaddleY;
-      this.aiPaddle.y += this.input.p2Dir * PLAYER_SPEED * dt;
-      this.aiPaddle.clamp();
+      this.movePlayer(this.aiPaddle, this.input.p2Dir, dt);
 
       if (this.hasReceivedBall) {
         // Prediccion local con la fisica real del host (avance + rebote en
@@ -431,6 +453,8 @@ export class Game {
   }
 
   private scale = 1;
+  /** CSS pixels per view unit (scale without dpr), for mapping pointer input. */
+  private cssScale = 1;
   private offsetX = 0;
   private offsetY = 0;
 
@@ -445,12 +469,14 @@ export class Game {
 
     const fit = Math.min(w / VIEW_WIDTH, h / VIEW_HEIGHT);
     this.scale = fit * dpr;
+    this.cssScale = fit;
     this.offsetX = (w / fit - VIEW_WIDTH) / 2;
     this.offsetY = (h / fit - VIEW_HEIGHT) / 2;
   };
 
   dispose(): void {
     window.removeEventListener("resize", this.resize);
+    this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.input.dispose();
     this.pongChan?.dispose();
   }
