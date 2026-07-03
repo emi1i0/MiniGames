@@ -37,13 +37,21 @@ Wired to the shared party mode: the constructor calls `initRoomMode("pong", { ge
 
 With `?room=` in the URL and Supabase connected, Pong becomes **online player-vs-player**. Each player controls one paddle from their own device:
 
-- **Pairing by index.** The room's player list is paired `(0,1), (2,3), ...`. Index even = P1 (left paddle, W/S). Index odd = P2 (right paddle, Arrow keys). If the count is odd, the last player is unpaired and plays vs AI (standard left-paddle controls, first to 7).
+- **Pairing by index.** The room's player list is paired `(0,1), (2,3), ...`. Index even = P1 (left paddle, W/S). Index odd = P2 (right paddle, Arrow keys). If the count is odd, the last player is unpaired and plays vs AI (combined W/S + arrows controls, first to 7). The player list is ordered by `joined_at` from the DB, so every client agrees on the pairing.
+
+- **Roles are resolved at round start, not in the constructor.** `initRoomMode` returns synchronously but loads `room.players()` asynchronously (`boot()`), so the list is still empty during construction. `Game.setupRoles()` (called from `beginCountdown()`, which `onStart` fires once the round is `playing`) is where the paddle side, opponent, and `PongChannel` get resolved — by then `players()` is populated. Computing this in the constructor misclassifies everyone as unpaired.
+
+- **The unpaired (vs-AI) player launches the ball locally.** Only P1 serves in a paired match (P2 receives the ball over the channel); an unpaired player has no P1, so `start()` launches the ball itself when `!hasOpponent`. Otherwise the ball would sit frozen at center.
+
+- **Broadcast payload nesting.** Supabase wraps broadcast data as `{ type, event, payload }`; `PongChannel` destructures `({ payload }) => ...` to read the real data (matching car-race / rocket-arena). Reading the envelope directly yields `undefined` fields (frozen ball, motionless opponent paddle).
 
 - **P1 is ball authority.** P1 (even index, left paddle) runs the full game simulation (both paddles, ball physics, collisions) and broadcasts the ball state via a dedicated Supabase Realtime channel (`room:{code}:pong`, event `"ball"`) at 20 fps.
 
-- **P2 is ball receiver.** P2 (odd index, right paddle) receives ball state from P1 via broadcast and renders it with dead reckoning (velocity advances + 30% correction per frame toward the latest target). P2 sends their own paddle position to P1 via broadcast (event `"paddle"`).
+- **P2 is ball receiver, with local prediction + reconciliation.** P2 (odd index, right paddle) receives ball state from P1 via broadcast, then predicts locally: it runs the real `Ball.update(dt)` each frame (true-speed motion + wall bounces) using the latest `vx/vy/speed` from snapshots, and reconciles *gently* toward the snapshot position — extrapolated forward by `SNAPSHOT_LEAD` so the correction never yanks the ball backward toward a stale (past) position. The old approach (advance-by-velocity then pull 30%/frame toward the raw stale target) fought the prediction, making the ball look slow, jittery, and wall-tunnel; that's what "va muy mal para el no-anfitrion" was. `BALL_RECONCILE_RATE` / `SNAPSHOT_LEAD` are the tuning knobs. P2 sends only its own paddle position to P1 (event `"paddle"`). Residual limit: the bounce off P2's own paddle is still confirmed by P1 (a round-trip), so a very high-latency link can still feel a slight delay on P2's own hits — would need client-side paddle-bounce prediction to remove.
 
-- **Both paddle positions are synced** via the same channel (event `"paddle"`). Each player broadcasts their own paddle Y at 20 fps. The opponent's paddle is displayed at the latest received position.
+- **One message per tick, and paddle rides the ball.** To stay under the Realtime rate limit, each side broadcasts exactly one message per 20 fps tick. P1's `"ball"` payload carries P1's paddle Y (`BallState.paddleY`), so P1 never sends a separate `"paddle"` event; only P2 sends `"paddle"` (its right paddle). Sending paddle + ball separately from P1 was 40 msg/s, over the default 10 msg/s ceiling — messages queued and both paddle and ball lagged/teleported. The ceiling is raised to 40 in `src/shared/supabase.ts` (`realtime.params.eventsPerSecond`), shared by all real-time games.
+
+- **Opponent paddle is interpolated, not snapped.** Received positions land in `opponentPaddleTargetY`; each frame `smoothOpponentPaddle(dt)` lerps `opponentPaddleY` toward it (`PADDLE_LERP_RATE`, dt-scaled). Assigning the raw received value made the paddle jump between 20 fps updates.
 
 - **Scoring.** The ball state includes `p1Score` and `p2Score`. P1 updates scores locally on goals; P2 receives them via each ball broadcast. Both clients display `P1 - P2` (P1 on the left, P2 on the right). First to 7 (`SCORE_LIMIT`) ends the match.
 

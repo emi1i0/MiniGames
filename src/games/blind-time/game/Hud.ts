@@ -80,6 +80,10 @@ export class Hud {
     svg.append(this.ringTrack, this.ringCircle);
     this.svgRingContainer.append(svg);
 
+    // Centered stack inside the ring, holding the stopwatch time + hint
+    const ringCenter = document.createElement("div");
+    ringCenter.className = "ring-center";
+
     // Stopwatch digital digits
     this.statusText = document.createElement("div");
     this.statusText.className = "reaction-card__status";
@@ -88,6 +92,9 @@ export class Hud {
     this.subStatusText = document.createElement("div");
     this.subStatusText.className = "reaction-card__substatus";
     this.subStatusText.textContent = "presiona ENTER o haz clic para comenzar";
+
+    ringCenter.append(this.statusText, this.subStatusText);
+    this.svgRingContainer.append(ringCenter);
 
     // Target Time Box (shows during round)
     this.targetContainer = document.createElement("div");
@@ -102,7 +109,7 @@ export class Hud {
     
     this.targetContainer.append(this.targetLabel, this.targetTimeEl);
 
-    contentWrapper.append(this.svgRingContainer, this.statusText, this.subStatusText, this.targetContainer);
+    contentWrapper.append(this.svgRingContainer, this.targetContainer);
     this.mainCard.append(contentWrapper);
 
     // Create HUD top bar (visible during gameplay)
@@ -176,7 +183,7 @@ export class Hud {
 
     this.titleEl.textContent = "CRONO CIEGO";
     this.subtitleEl.textContent =
-      "Te mostraremos un tiempo objetivo (entre 2 y 12 segundos). El reloj comenzará a contar y a los 0.7 segundos desaparecerá la pantalla. ¡Detenlo lo más cerca posible del objetivo!";
+      "Te mostraremos un tiempo objetivo (entre 3 y 12 segundos). El reloj comenzará a contar y a los 1.5 segundos desaparecerá la pantalla. ¡Detenlo lo más cerca posible del objetivo!";
 
     if (bestScore !== null) {
       this.scoreLineEl.textContent = `MEJOR DESVIACIÓN: ${bestScore.toFixed(0)} ms`;

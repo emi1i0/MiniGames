@@ -10,6 +10,8 @@ export interface BallState {
   hits: number;
   p1Score: number;
   p2Score: number;
+  /** Posicion Y de la paleta de P1, adosada a la pelota para ahorrar mensajes. */
+  paddleY: number;
 }
 
 export class PongChannel {
@@ -28,15 +30,15 @@ export class PongChannel {
       config: { broadcast: { self: false } },
     });
 
-    (this.channel as RealtimeChannel).on("broadcast", { event: "paddle" }, (payload: Record<string, unknown>) => {
+    (this.channel as RealtimeChannel).on("broadcast", { event: "paddle" }, ({ payload }: { payload: unknown }) => {
       const d = payload as { player: string; y: number };
       if (d.player !== this.me) {
         for (const cb of this.paddleCbs) cb(d.player, d.y);
       }
     });
 
-    (this.channel as RealtimeChannel).on("broadcast", { event: "ball" }, (payload: Record<string, unknown>) => {
-      for (const cb of this.ballCbs) cb(payload as unknown as BallState);
+    (this.channel as RealtimeChannel).on("broadcast", { event: "ball" }, ({ payload }: { payload: unknown }) => {
+      for (const cb of this.ballCbs) cb(payload as BallState);
     });
 
     this.channel.subscribe();

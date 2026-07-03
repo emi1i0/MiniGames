@@ -81,7 +81,6 @@ body {
   font-size: 48px;
   font-weight: 700;
   letter-spacing: 1px;
-  margin-top: 20px;
   margin-bottom: 8px;
   text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
   transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -94,8 +93,21 @@ body {
   color: rgba(255, 255, 255, 0.6);
   text-transform: uppercase;
   text-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-  max-width: 420px;
+  max-width: 240px;
   line-height: 1.4;
+}
+
+/* Centered time/hint stack sitting in the middle of the progress ring */
+.ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
+  pointer-events: none;
 }
 
 /* --- SVG Progress Ring --- */
@@ -111,15 +123,15 @@ body {
 
 .progress-ring {
   filter: drop-shadow(0 0 12px rgba(255, 221, 83, 0.25));
-  transition: filter 0.3s ease;
+  transition: filter 0.3s ease, opacity 0.4s ease, transform 0.4s ease;
 }
 
 .progress-ring circle {
   transition: stroke-dashoffset 0.1s linear, stroke 0.3s ease;
 }
 
-/* Blind state for ring (completely hidden to make clock invisible) */
-.progress-ring-container.blind-ring {
+/* Blind state: hide only the ring visual, keep the centered text visible */
+.progress-ring-container.blind-ring .progress-ring {
   opacity: 0;
   visibility: hidden;
   transform: scale(0.9);

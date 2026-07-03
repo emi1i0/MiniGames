@@ -110,7 +110,10 @@ export class Game {
     this.hud.setBest(this.best);
     this.hud.showStart();
 
-    this.room = initRoomMode("dunk-shot", { getScore: () => this.score });
+    this.room = initRoomMode("dunk-shot", {
+      getScore: () => this.score,
+      onStart: () => this.beginCountdown(),
+    });
 
     window.addEventListener("keydown", this.handleKeyDown);
     this.canvas.addEventListener("pointerdown", this.handlePointerDown);

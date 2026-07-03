@@ -42,7 +42,7 @@ The game moves through the following states in `Game.ts`:
 
 **Performance.now() Precision**: We use `performance.now()` for recording milliseconds, which provides sub-millisecond precision, free from local system clock adjustments.
 
-**Global ranking (lower is better)**: unlike most games, the score is the average reaction time in ms, so this game is registered in `GAME_SCORING` (see root `CLAUDE.md`) with `direction: "lower"` and a `format` that appends `ms`. `endGame()` submits the average via `hud.showRanking("reaction-time", average)`.
+**Global ranking (lower is better)**: unlike most games, the score is the average reaction time in ms, so this game declares its scoring (`export const scoring`, see root `CLAUDE.md`) in its `meta.ts` with `direction: "lower"` and a `format` that appends `ms`. `endGame()` submits the average via `hud.showRanking("reaction-time", average)`.
 
 ## Room mode (multiplayer)
 
