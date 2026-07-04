@@ -8,8 +8,9 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 - **Keep `CLAUDE.md` files up to date with every change.** When structure, commands, conventions, or the game roster change, update the relevant `CLAUDE.md` (this root file and/or the per-game one) in the same change.
 - **Never add yourself (Claude) as a co-author on commits.** Do not append `Co-Authored-By` trailers or any AI attribution to commit messages.
 - **Use the installed `threejs-*` skills when building 3D games.** For any game using Three.js (scenes, cameras, geometry, materials, lighting, textures, animation, model loaders, shaders, postprocessing, raycasting/interaction), consult the matching `threejs-*` skill for accurate APIs and patterns instead of relying on memory.
-- **Every game must have the Enter-to-start 3 / 2 / 1 / YA countdown.** No game may jump straight from the start / game-over screen into play — it must go through the shared countdown described below. New games are required to implement it.
-- **This repo uses Git Flow.** Branch off `develop` for work: features on `feature/*`, releases on `release/*`, hotfixes on `hotfix/*`. `main` holds only tagged releases; `develop` is the integration branch. Do not commit straight to `main` or `develop` — merge via the appropriate branch.
+- Every game must have the Enter-to-start 3 / 2 / 1 / YA countdown. No game may jump straight from the start / game-over screen into play — it must go through the shared countdown described below. New games are required to implement it.
+- This repo uses Git Flow. Branch off `develop` for work: features on `feature/*`, releases on `release/*`, hotfixes on `hotfix/*`. `main` holds only tagged releases; `develop` is the integration branch. Do not commit straight to `main` or `develop` — merge via the appropriate branch.
+- **Always add credits for new games in `README.md`.** When a new game is registered, append it to the games table in the root-level [README.md](file:///c:/ReposGit/Game/README.md) with its title, category, description (adapted to localized Spanish "voseo" style), and the creator's GitHub profile link.
 
 ## Structure
 
@@ -40,6 +41,7 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 6. Wire the global ranking (see "Global rankings" below): if the game's scoring is non-default, add `export const scoring: GameScoring` to its `meta.ts` (omit it for a plain `{ direction: "higher" }` board); then call `hud.showRanking(...)` on game over.
 7. Wire the multiplayer room mode (see "Salas (multiplayer rooms)" below): `initRoomMode(<id>, { getScore })` in the constructor, block the restart input on game over when `this.room` is set, and call `this.room.reportScore(score)` instead of `hud.showRanking(...)`.
 8. Run `npm run build` to confirm the new entry is discovered.
+9. Add the game and its author/credits to the games table in the root-level [README.md](file:///c:/ReposGit/Game/README.md).
 
 Games are intentionally decoupled — no shared game-engine code between them. Don't introduce a shared abstraction across games unless a second game actually needs it. The lone exception is `src/shared/` (global rankings), which is deliberately cross-cutting infra, not gameplay logic.
 

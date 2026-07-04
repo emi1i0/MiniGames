@@ -1,6 +1,6 @@
 # Snake
 
-Classic grid snake. The snake advances one cell per step on a 20x20 grid; eating the food grows it by one segment, speeds it up, and scores +1. Hitting a wall or its own body ends the run. Plain 2D `<canvas>`, no Three.js.
+Classic grid snake. The snake advances one cell per step on a 14x14 grid; eating the food grows it by one segment, speeds it up, and scores +1. Hitting a wall or its own body ends the run. Plain 2D `<canvas>`, no Three.js.
 
 ## Module layout
 
@@ -24,7 +24,7 @@ Classic grid snake. The snake advances one cell per step on a 20x20 grid; eating
 
 **Controls.** Arrow keys or WASD to turn. Swipe/drag on the canvas (pointer events): a move past a 24px threshold in the dominant axis queues a turn and re-anchors, so a continuous drag can chain turns. Enter or tap/click to start and to restart.
 
-**Square view box.** 480x480 (20 cells x 24px). Letterbox scaling handles any screen; the HUD score sits above the board.
+**Square view box.** 336x336 (14 cells x 24px). Letterbox scaling handles any screen; the HUD score sits above the board.
 
 **Enter-to-start countdown.** Standard repo pattern: 3 / 2 / 1 / YA (COUNTDOWN_LABELS, COUNTDOWN_STEP in constants.ts), 0.6 s restart guard after dying.
 
