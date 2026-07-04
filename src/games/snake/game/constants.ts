@@ -1,5 +1,5 @@
-export const GRID_COLS = 20;
-export const GRID_ROWS = 20;
+export const GRID_COLS = 14;
+export const GRID_ROWS = 14;
 export const CELL = 24;
 
 export const VIEW_WIDTH = GRID_COLS * CELL;
