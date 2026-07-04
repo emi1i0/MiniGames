@@ -1,9 +1,11 @@
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
+import { INITIAL_LIVES } from "./constants";
 
 export class Hud {
   private readonly scoreEl: HTMLDivElement;
   private readonly bestEl: HTMLDivElement;
   private readonly timerEl: HTMLDivElement;
+  private readonly livesEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly titleEl: HTMLDivElement;
   private readonly subtitleEl: HTMLDivElement;
@@ -29,10 +31,13 @@ export class Hud {
     this.timerEl = document.createElement("div");
     this.timerEl.className = "hud__timer";
 
+    this.livesEl = document.createElement("div");
+    this.livesEl.className = "hud__lives";
+
     this.bestEl = document.createElement("div");
     this.bestEl.className = "hud__best";
 
-    hud.append(this.scoreEl, this.timerEl, this.bestEl);
+    hud.append(this.scoreEl, this.livesEl, this.timerEl, this.bestEl);
 
     this.overlayEl = document.createElement("div");
     this.overlayEl.className = "overlay";
@@ -139,9 +144,20 @@ export class Hud {
     this.bestEl.textContent = best > 0 ? `RECORD: ${best}` : "";
   }
 
-  /** Tiempo restante de la ronda; null lo oculta. */
+  /** Tiempo restante de la ronda; null lo oculta (modo sala). */
   setTimer(seconds: number | null): void {
     this.timerEl.textContent = seconds === null ? "" : `${Math.ceil(seconds)}s`;
+  }
+
+  /** Vidas restantes (modo solo); -1 lo oculta (modo sala, no hay vidas). */
+  setLives(lives: number): void {
+    if (lives < 0) {
+      this.livesEl.textContent = "";
+      return;
+    }
+    let dots = "";
+    for (let i = 0; i < INITIAL_LIVES; i++) dots += i < lives ? "●" : "○";
+    this.livesEl.textContent = dots;
   }
 
   showStart(): void {
@@ -152,9 +168,9 @@ export class Hud {
     this.hintEl.innerHTML = `
       Controles:<br>
       <span class="overlay__hint-keys">Click</span> : Aplastar el topo<br>
-      Los <span class="overlay__hint-gold">dorados</span> valen mas.
-      No le pegues a las <span class="overlay__hint-bomb">bombas</span>.<br>
-      Tienes 60 segundos. ¡A darle!
+      Los <span class="overlay__hint-gold">dorados</span> valen mas.<br>
+      Tienes 3 vidas: pierdes una por cada
+      <span class="overlay__hint-bomb">bomba</span> que golpees.
     `;
     this.leaderboard.clear();
     this.overlayEl.classList.remove("hidden");
@@ -165,8 +181,8 @@ export class Hud {
   }
 
   showGameOver(score: number, best: number): void {
-    this.titleEl.textContent = "SE ACABO EL TIEMPO";
-    this.subtitleEl.textContent = "";
+    this.titleEl.textContent = "FIN DE LA PARTIDA";
+    this.subtitleEl.textContent = "TE QUEDASTE SIN VIDAS";
 
     if (score >= best && score > 0) {
       this.scoreLineEl.innerHTML = `¡NUEVO RECORD!<br><span class="overlay__score-big">${score}</span>`;

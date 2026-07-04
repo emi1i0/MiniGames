@@ -2,6 +2,7 @@ import "./style.css";
 import { games, coverUrl, type GameEntry } from "./games";
 import { LeaderboardPanel } from "./shared/LeaderboardPanel";
 import { getScoring } from "./shared/scoring";
+import { fetchTop } from "./shared/leaderboard";
 import { isLeaderboardEnabled } from "./shared/supabase";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
@@ -77,7 +78,10 @@ games.forEach((game, i) => {
       <div class="game-card__fallback"></div>
       <span class="game-card__tag">${game.category}</span>
     </div>
-    <h2 class="game-card__name">${game.title}</h2>
+    <div class="game-card__head">
+      <h2 class="game-card__name">${game.title}</h2>
+      <span class="game-card__champ" hidden></span>
+    </div>
   `;
 
   // Portada generada por IA; si el archivo no existe queda el fallback.
@@ -101,10 +105,32 @@ games.forEach((game, i) => {
       openRankingModal(game);
     });
     card.querySelector(".game-card__cover")!.append(rankBtn);
+
+    const champEl = card.querySelector<HTMLElement>(".game-card__champ")!;
+    void loadChampion(game, champEl);
   }
 
   grid.append(card);
 });
+
+// Muestra al lider (Top 1) del ranking global junto al nombre del juego.
+async function loadChampion(game: GameEntry, el: HTMLElement): Promise<void> {
+  const scoring = getScoring(game.id);
+  const variant = scoring.variants?.[0];
+  const [top] = await fetchTop(game.id, { variant, limit: 1 });
+  if (!top) return;
+
+  el.innerHTML = `
+    <svg class="game-card__crown" viewBox="0 0 24 24" width="15" height="15" fill="currentColor" aria-hidden="true">
+      <path d="M3 7l4 3 5-6 5 6 4-3-2 12H5L3 7zm2 14h14v2H5v-2z" />
+    </svg>
+  `;
+  const name = document.createElement("span");
+  name.className = "game-card__champ-name";
+  name.textContent = top.player;
+  el.append(name);
+  el.hidden = false;
+}
 
 // Banner destacado de salas multijugador, entre los filtros y la grilla.
 const roomsBanner = document.createElement("a");

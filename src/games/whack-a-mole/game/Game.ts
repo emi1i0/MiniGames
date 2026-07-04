@@ -9,11 +9,11 @@ import {
   HOLD_DURATION_MIN,
   HOLE_RX,
   HOLE_RY,
+  INITIAL_LIVES,
   MAX_DT,
   MISS_PENALTY,
   MOLE_RADIUS,
   RAMP_SEC,
-  ROUND_SEC,
   ROWS,
   SPAWN_INTERVAL_BASE,
   SPAWN_INTERVAL_MIN,
@@ -51,8 +51,10 @@ export class Game {
   private state: State = "ready";
   private score = 0;
   private best = Number(localStorage.getItem(BEST_KEY)) || 0;
+  private lives = INITIAL_LIVES;
 
-  private roundTimer = ROUND_SEC;
+  /** Fin de la ronda en salas segun el tope que fijo el host; null = sin tope. */
+  private roomDeadline: Date | null = null;
   private elapsed = 0;
   private spawnTimer = 0;
 
@@ -152,14 +154,19 @@ export class Game {
   private beginCountdown(): void {
     this.state = "countdown";
     this.score = 0;
+    this.lives = INITIAL_LIVES;
     this.moles = [];
     this.elapsed = 0;
     this.spawnTimer = 0;
-    this.roundTimer = ROUND_SEC;
+    // Salas: el tope de tiempo de la ronda lo fija el anfitrion (ajuste fijo o
+    // votacion). Lo tomamos del deadline de la sala; "Sin límite" -> null (solo
+    // vidas). En solo no hay tope de tiempo.
+    this.roomDeadline = this.room ? this.room.deadline() : null;
     this.swing = null;
 
     this.hud.setScore(0);
-    this.hud.setTimer(ROUND_SEC);
+    this.hud.setLives(INITIAL_LIVES);
+    this.hud.setTimer(this.roomRemaining());
     this.hud.hide();
 
     this.lastCountdownIndex = -1;
@@ -194,10 +201,12 @@ export class Game {
     target.whack();
 
     if (target.type === "bomb") {
-      this.score = Math.max(0, this.score + target.points);
-      this.hud.setScore(this.score);
-      this.hud.addPopup(String(target.points), x, y - 30, "#ff5a5a");
+      // En solo y en salas la bomba cuesta una vida.
       SoundEffects.playBomb();
+      this.lives--;
+      this.hud.setLives(this.lives);
+      this.hud.addPopup("-1 vida", x, y - 30, "#ff5a5a");
+      if (this.lives <= 0) this.gameOver();
       return;
     }
 
@@ -223,6 +232,12 @@ export class Game {
     this.hud.showGameOver(this.score, this.best);
     if (this.room) this.room.reportScore(this.score);
     else this.hud.showRanking("whack-a-mole", this.score);
+  }
+
+  /** Segundos restantes de la ronda en salas, o null si no hay tope de tiempo. */
+  private roomRemaining(): number | null {
+    if (!this.room || !this.roomDeadline) return null;
+    return Math.max(0, (this.roomDeadline.getTime() - Date.now()) / 1000);
   }
 
   // ── Spawner ───────────────────────────────────────────────────────
@@ -292,8 +307,17 @@ export class Game {
 
     if (this.state === "playing") {
       this.elapsed += dt;
-      this.roundTimer -= dt;
-      this.hud.setTimer(Math.max(0, this.roundTimer));
+
+      // Salas con tope de tiempo del host: al vencer el deadline se corta la
+      // ronda (tope de seguridad ademas de las vidas). "Sin límite" -> sin corte.
+      if (this.room && this.roomDeadline) {
+        const rem = this.roomRemaining();
+        this.hud.setTimer(rem);
+        if (rem !== null && rem <= 0) {
+          this.gameOver();
+          return;
+        }
+      }
 
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
@@ -303,10 +327,6 @@ export class Game {
 
       for (const m of this.moles) m.update(dt);
       this.moles = this.moles.filter((m) => !m.done);
-
-      if (this.roundTimer <= 0) {
-        this.gameOver();
-      }
     }
   }
 

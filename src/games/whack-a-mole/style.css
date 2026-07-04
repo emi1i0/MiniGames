@@ -66,22 +66,24 @@ body {
 /* ── HUD ────────────────────────────────────────────────────────── */
 .hud {
   position: absolute;
-  top: 20px;
-  right: 24px;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
+  align-items: center;
   pointer-events: none;
   gap: 2px;
 }
 
 .hud__score {
-  font-size: 40px;
+  font-size: 44px;
   font-weight: 800;
   color: #fff;
   text-shadow: 0 0 12px rgba(107, 191, 94, 0.7), 0 2px 4px rgba(0, 0, 0, 0.5);
   letter-spacing: 1px;
+  line-height: 1;
 }
 
 .hud__timer {
@@ -92,6 +94,16 @@ body {
   text-shadow: 0 0 8px rgba(255, 224, 130, 0.6), 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 .hud__timer:empty {
+  display: none;
+}
+
+.hud__lives {
+  font-size: 22px;
+  letter-spacing: 3px;
+  color: #ff6b6b;
+  text-shadow: 0 0 8px rgba(255, 107, 107, 0.5), 0 2px 3px rgba(0, 0, 0, 0.5);
+}
+.hud__lives:empty {
   display: none;
 }
 

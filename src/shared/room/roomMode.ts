@@ -72,6 +72,13 @@ export interface RoomMode {
   ping(): void;
   /** Se dispara cuando otro cliente hizo ping (releer la DB). */
   onSync(cb: () => void): void;
+  /**
+   * Fin de la ronda en curso segun lo que fijo el host (ajuste fijo o votacion
+   * de tiempo), o null si la ronda no tiene tope ("Sin límite"). Incluye el
+   * margen de navegacion/countdown, asi que al arrancar la partida el tiempo
+   * restante ronda el valor nominal elegido por el anfitrion.
+   */
+  deadline(): Date | null;
 }
 
 /** Variante fija que usa cada juego con variantes cuando corre en modo sala. */
@@ -149,6 +156,7 @@ export function initRoomMode(gameId: string, hooks: RoomModeHooks): RoomMode | n
       isHost: () => false,
       ping: () => {},
       onSync: () => {},
+      deadline: () => null,
     };
   }
 
@@ -255,6 +263,11 @@ class RoomModeController implements RoomMode {
 
   onSync(cb: () => void): void {
     this.gameSyncCbs.push(cb);
+  }
+
+  deadline(): Date | null {
+    const iso = this.state?.room.deadline;
+    return iso ? new Date(iso) : null;
   }
 
   // ---------- Estado ----------

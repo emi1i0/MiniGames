@@ -51,6 +51,28 @@ export function formatTimeMoves(encoded: number): string {
   return `${formatClock(centis)} - ${moves} mov`;
 }
 
+/**
+ * Igual que encodeTimeMoves pero con los movimientos en la parte alta: ordena
+ * un ranking por movimientos (menos mejor) y desempata por tiempo. Se usa en
+ * torres-de-hanoi, donde el minimo de movimientos (2^n - 1) es la marca a batir
+ * y el tiempo solo desempata entre soluciones igual de eficientes.
+ * `movimientos * BASE + centisegundos`, con los centisegundos topeados por debajo
+ * de BASE.
+ */
+const MOVES_TIME_BASE = 1000000;
+
+export function encodeMovesTime(moves: number, seconds: number): number {
+  const clampedMoves = Math.max(0, Math.round(moves));
+  const centis = Math.min(Math.max(0, Math.round(seconds * 100)), MOVES_TIME_BASE - 1);
+  return clampedMoves * MOVES_TIME_BASE + centis;
+}
+
+export function formatMovesTime(encoded: number): string {
+  const moves = Math.floor(encoded / MOVES_TIME_BASE);
+  const centis = encoded % MOVES_TIME_BASE;
+  return `${moves} mov - ${formatClock(centis)}`;
+}
+
 /** "1:23.45" a partir de centisegundos (minutos:segundos.centesimas). */
 export function formatClock(centiseconds: number): string {
   const cs = Math.max(0, Math.round(centiseconds));
