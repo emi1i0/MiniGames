@@ -25,13 +25,13 @@ Controls: arrows or WASD move in all four directions; on touch, dragging steers 
 
 ## Obstacles: debris fields (`Obstacle.ts`)
 
-There are **no solid walls**. Each obstacle is a **field of drifting, tumbling space objects** scattered across the corridor cross-section with a **guaranteed clear lane** kept object-free at its center (framed by four amber markers). Collision is **per-object** (`isSafe` = the ship, radius `PLAYER_RADIUS`, touches no object), so any open pocket — not just the lane — is survivable; you dodge the debris rather than thread a hole. Three visual kinds, chosen at random per spawn (`ObstacleSpawner`, equal weight):
+Each obstacle is an **invisible barrier across the whole corridor cross-section with one rectangular clear lane** — the only way through — dressed with a **sparse scatter of tumbling space objects** that telegraphs it. Collision is the **lane test** (`isSafe` = the whole ship footprint, `PLAYER_HALF_WIDTH/HEIGHT`, sits inside the lane rect with `COLLISION_TOLERANCE` slack): anywhere outside the lane is a crash, so you can't slip through a corner or drag along the floor. The debris is deliberately **sparse** (it is decoration, not the collider) so a field never obscures the next one; the four **amber lane markers**, not the debris, are what tell the player where the safe hole is. Three visual kinds, chosen at random per spawn (`ObstacleSpawner`, equal weight):
 
 - **`meteor`** — lumpy grey faceted rocks.
 - **`ice`** — elongated pale-blue crystal shards (faintly emissive).
 - **`debris`** — metallic boxes and cylinders (ship wreckage).
 
-Object count grows a little with score (`DEBRIS_COUNT_*`) and the clear lane shrinks (`LANE_*`). Each field exposes its clear-lane center (`centerX/Y`) for reachability chaining (see below).
+Debris density is set by `DEBRIS_CELL` (bigger = fewer objects), `DEBRIS_KEEP_CHANCE` (random thinning for fine control) + `DEBRIS_OBJ_MIN/MAX_RADIUS`; the clear lane shrinks with score (`LANE_*`). Each field exposes its clear-lane center (`centerX/Y`) for reachability chaining (see below). Because the barrier is a hard wall, **reachability is critical** — an unreachable lane is an unavoidable crash — so keep an eye on `GAP_REACH_FACTOR` when tuning speed/spacing.
 
 ## Non-obvious gotchas
 

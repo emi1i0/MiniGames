@@ -1,9 +1,6 @@
 import * as THREE from "three";
 import { Obstacle, type ObstacleKind } from "./Obstacle";
 import {
-  DEBRIS_COUNT_BASE,
-  DEBRIS_COUNT_MAX,
-  DEBRIS_COUNT_PER_POINT,
   FIELD_HALF_HEIGHT,
   FIELD_HALF_WIDTH,
   GAP_REACH_FACTOR,
@@ -82,7 +79,6 @@ export class ObstacleSpawner {
 
     const laneHalfWidth = Math.max(LANE_HALF_WIDTH_MIN, LANE_HALF_WIDTH_START - score * LANE_SHRINK_PER_POINT);
     const laneHalfHeight = Math.max(LANE_HALF_HEIGHT_MIN, LANE_HALF_HEIGHT_START - score * LANE_SHRINK_PER_POINT);
-    const count = Math.min(DEBRIS_COUNT_MAX, Math.round(DEBRIS_COUNT_BASE + score * DEBRIS_COUNT_PER_POINT));
 
     const spacing = OBSTACLE_SPACING_MIN + Math.random() * (OBSTACLE_SPACING_MAX - OBSTACLE_SPACING_MIN);
     const reach = PLAYER_MOVE_SPEED * (spacing / speed) * GAP_REACH_FACTOR;
@@ -101,7 +97,6 @@ export class ObstacleSpawner {
       centerY,
       laneHalfWidth,
       laneHalfHeight,
-      count,
     });
     this.obstacles.push(obstacle);
     this.scene.add(obstacle.group);

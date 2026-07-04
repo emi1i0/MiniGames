@@ -1,12 +1,17 @@
 import * as THREE from "three";
 import {
   COLLISION_TOLERANCE,
+  DEBRIS_CELL,
   DEBRIS_COLOR,
+  DEBRIS_KEEP_CHANCE,
+  DEBRIS_OBJ_MAX_RADIUS,
+  DEBRIS_OBJ_MIN_RADIUS,
   FIELD_HALF_HEIGHT,
   FIELD_HALF_WIDTH,
   HAZARD_COLOR,
   ICE_COLOR,
-  PLAYER_RADIUS,
+  PLAYER_HALF_HEIGHT,
+  PLAYER_HALF_WIDTH,
   ROCK_COLOR,
 } from "./constants";
 
@@ -15,12 +20,11 @@ export type ObstacleKind = "meteor" | "ice" | "debris";
 export interface ObstacleConfig {
   kind: ObstacleKind;
   z: number;
-  /** Center of the guaranteed clear lane (used for reachability chaining). */
+  /** Center of the guaranteed clear lane (also used for reachability chaining). */
   centerX: number;
   centerY: number;
   laneHalfWidth: number;
   laneHalfHeight: number;
-  count: number;
 }
 
 // Shared low-poly geometries (never disposed — reused for the whole session).
@@ -37,10 +41,10 @@ interface Spinner {
 }
 
 /**
- * A field of drifting space objects (no solid walls) with a guaranteed clear
- * lane at its center. Collision is per-object, so any open pocket is survivable
- * — you dodge the debris rather than thread a hole. Three visual kinds:
- * `meteor` (rock), `ice` (crystal shards) and `debris` (metal wreckage).
+ * A dense wall of drifting space objects packed across the whole cross-section
+ * with a single clear lane cut out at its center — you can only get through via
+ * that safe zone. Three visual kinds: `meteor` (rock), `ice` (crystal shards)
+ * and `debris` (metal wreckage). The lane is framed by amber markers.
  */
 export class Obstacle {
   readonly group: THREE.Group;
@@ -49,14 +53,17 @@ export class Obstacle {
   readonly centerY: number;
   resolved = false;
 
+  private readonly laneHalfWidth: number;
+  private readonly laneHalfHeight: number;
   private readonly disposables: Array<THREE.Material | THREE.BufferGeometry> = [];
   private readonly spinners: Spinner[] = [];
-  private readonly objects: Array<{ x: number; y: number; r: number }> = [];
 
   constructor(cfg: ObstacleConfig) {
     this.kind = cfg.kind;
     this.centerX = cfg.centerX;
     this.centerY = cfg.centerY;
+    this.laneHalfWidth = cfg.laneHalfWidth;
+    this.laneHalfHeight = cfg.laneHalfHeight;
     this.group = new THREE.Group();
     this.group.position.z = cfg.z;
 
@@ -77,12 +84,12 @@ export class Obstacle {
     return this.group.position.z;
   }
 
-  /** Safe when the ship touches none of the field's objects. */
+  /** Safe only when the whole ship footprint sits inside the clear lane. */
   isSafe(px: number, py: number): boolean {
-    for (const o of this.objects) {
-      if (Math.hypot(px - o.x, py - o.y) < o.r + PLAYER_RADIUS - COLLISION_TOLERANCE) return false;
-    }
-    return true;
+    return (
+      Math.abs(px - this.centerX) + PLAYER_HALF_WIDTH <= this.laneHalfWidth + COLLISION_TOLERANCE &&
+      Math.abs(py - this.centerY) + PLAYER_HALF_HEIGHT <= this.laneHalfHeight + COLLISION_TOLERANCE
+    );
   }
 
   dispose(): void {
@@ -127,30 +134,34 @@ export class Obstacle {
 
     const laneHW = cfg.laneHalfWidth;
     const laneHH = cfg.laneHalfHeight;
+    // Scatter debris across the whole cross-section (a touch past the edges) as a
+    // sparse telegraph of the barrier — the real block is the invisible lane test.
+    const edgeX = FIELD_HALF_WIDTH + DEBRIS_CELL * 0.5;
+    const edgeY = FIELD_HALF_HEIGHT + DEBRIS_CELL * 0.5;
 
-    let placed = 0;
-    let attempts = 0;
-    while (placed < cfg.count && attempts < cfg.count * 10) {
-      attempts++;
-      const x = (Math.random() * 2 - 1) * FIELD_HALF_WIDTH;
-      const y = (Math.random() * 2 - 1) * FIELD_HALF_HEIGHT;
-      const r = 0.5 + Math.random() * 0.95;
-      // Keep the reachable clear lane completely free.
-      if (Math.abs(x - cfg.centerX) < laneHW + r + 0.3 && Math.abs(y - cfg.centerY) < laneHH + r + 0.3) {
-        continue;
+    // Jittered grid; skip the rectangular hole that is the clear lane.
+    for (let gx = -edgeX; gx <= edgeX + 0.001; gx += DEBRIS_CELL) {
+      for (let gy = -edgeY; gy <= edgeY + 0.001; gy += DEBRIS_CELL) {
+        const jx = gx + (Math.random() * 2 - 1) * DEBRIS_CELL * 0.32;
+        const jy = gy + (Math.random() * 2 - 1) * DEBRIS_CELL * 0.32;
+        const r = DEBRIS_OBJ_MIN_RADIUS + Math.random() * (DEBRIS_OBJ_MAX_RADIUS - DEBRIS_OBJ_MIN_RADIUS);
+        // Keep the lane hole clear (widened by the object radius so nothing pokes in).
+        if (Math.abs(jx - cfg.centerX) < laneHW + r && Math.abs(jy - cfg.centerY) < laneHH + r) {
+          continue;
+        }
+        // Random thinning for fine density control (the grid steps are coarse).
+        if (Math.random() > DEBRIS_KEEP_CHANCE) continue;
+        const mesh = this.makeObjectMesh(cfg.kind, mat, r);
+        mesh.position.set(jx, jy, (Math.random() * 2 - 1) * 0.9);
+        mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
+        this.group.add(mesh);
+        this.spinners.push({
+          obj: mesh,
+          sx: (Math.random() * 2 - 1) * 0.5,
+          sy: (Math.random() * 2 - 1) * 0.5,
+          sz: (Math.random() * 2 - 1) * 0.5,
+        });
       }
-      this.objects.push({ x, y, r });
-      const mesh = this.makeObjectMesh(cfg.kind, mat, r);
-      mesh.position.set(x, y, (Math.random() * 2 - 1) * 0.8);
-      mesh.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI);
-      this.group.add(mesh);
-      this.spinners.push({
-        obj: mesh,
-        sx: (Math.random() * 2 - 1) * 0.6,
-        sy: (Math.random() * 2 - 1) * 0.6,
-        sz: (Math.random() * 2 - 1) * 0.6,
-      });
-      placed++;
     }
   }
 

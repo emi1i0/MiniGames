@@ -40,10 +40,16 @@ export const LANE_HALF_WIDTH_MIN = 1.5;
 export const LANE_HALF_HEIGHT_MIN = 1.2;
 export const LANE_SHRINK_PER_POINT = 0.028;
 
-// Number of debris objects per field (grows a little with score).
-export const DEBRIS_COUNT_BASE = 12;
-export const DEBRIS_COUNT_PER_POINT = 0.18;
-export const DEBRIS_COUNT_MAX = 22;
+// Debris density: the objects are only a *sparse telegraph* of the barrier —
+// the actual block is the invisible lane test in Obstacle.isSafe. Kept sparse
+// (bigger cell = fewer objects) so a field never obscures the next one. The
+// amber lane markers, not the debris, tell the player where the safe hole is.
+export const DEBRIS_CELL = 4.5;
+// Random thinning on top of the grid, for fine control of density (grid steps
+// are coarse). 1 = keep every cell; lower = fewer objects.
+export const DEBRIS_KEEP_CHANCE = 0.9;
+export const DEBRIS_OBJ_MIN_RADIUS = 0.85;
+export const DEBRIS_OBJ_MAX_RADIUS = 1.35;
 
 // Fraction of the ship's reachable travel the clear lane may drift from the
 // previous one (keeps every field catchable — skill, not luck).

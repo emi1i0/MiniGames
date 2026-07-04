@@ -29,48 +29,48 @@ function makeSaturnTexture(): THREE.CanvasTexture {
   canvas.height = h;
   const ctx = canvas.getContext("2d")!;
   
-  // Base golden background
-  ctx.fillStyle = "#caa96e";
+  // Base deep celestial navy background
+  ctx.fillStyle = "#091c33";
   ctx.fillRect(0, 0, w, h);
   
   // Create beautiful latitudinal bands using a detailed gradient
   const gradient = ctx.createLinearGradient(0, 0, 0, h);
   
-  // North polar region (bluish-grey cap)
-  gradient.addColorStop(0.0, "rgb(75,85,95)");
-  gradient.addColorStop(0.1, "rgb(115,120,115)");
+  // North polar region (deep teal-grey cap)
+  gradient.addColorStop(0.0, "rgb(20, 60, 70)");
+  gradient.addColorStop(0.1, "rgb(25, 45, 60)");
   
-  // Northern bands (tan, gold, brown stripes)
-  gradient.addColorStop(0.2, "rgb(160,135,100)");
-  gradient.addColorStop(0.3, "rgb(202,169,110)");
-  gradient.addColorStop(0.38, "rgb(150,120,85)");
-  gradient.addColorStop(0.42, "rgb(233,220,188)"); // thin bright zone
-  gradient.addColorStop(0.45, "rgb(180,150,115)");
+  // Northern bands (navy, steel-blue, aquamarine, white stripes)
+  gradient.addColorStop(0.2, "rgb(15, 32, 67)");
+  gradient.addColorStop(0.3, "rgb(40, 116, 166)");
+  gradient.addColorStop(0.38, "rgb(21, 67, 96)");
+  gradient.addColorStop(0.42, "rgb(220, 242, 255)"); // bright ice-white band
+  gradient.addColorStop(0.45, "rgb(31, 97, 141)");
   
-  // Equatorial Zone (bright creamy gold, very wide)
-  gradient.addColorStop(0.50, "rgb(240,225,190)");
-  gradient.addColorStop(0.55, "rgb(245,230,200)");
-  gradient.addColorStop(0.60, "rgb(230,210,170)");
+  // Equatorial Zone (bright aquamarine and soft sky blue, very wide)
+  gradient.addColorStop(0.50, "rgb(52, 152, 219)");
+  gradient.addColorStop(0.55, "rgb(133, 193, 233)");
+  gradient.addColorStop(0.60, "rgb(41, 128, 185)");
   
   // Southern bands
-  gradient.addColorStop(0.66, "rgb(175,145,110)");
-  gradient.addColorStop(0.72, "rgb(202,169,110)");
-  gradient.addColorStop(0.80, "rgb(140,110,80)");
-  gradient.addColorStop(0.90, "rgb(115,120,115)");
+  gradient.addColorStop(0.66, "rgb(26, 82, 118)");
+  gradient.addColorStop(0.72, "rgb(40, 116, 166)");
+  gradient.addColorStop(0.80, "rgb(20, 52, 80)");
+  gradient.addColorStop(0.90, "rgb(25, 45, 60)");
   
-  // South polar region (bluish-grey cap)
-  gradient.addColorStop(1.0, "rgb(75,85,95)");
+  // South polar region (deep teal-grey cap)
+  gradient.addColorStop(1.0, "rgb(20, 60, 70)");
   
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, w, h);
   
-  // Add fine horizontal lines (micro-banding) for extreme realism
+  // Add fine horizontal lines (micro-banding)
   const numMicroBands = 80;
   for (let i = 0; i < numMicroBands; i++) {
     const y = Math.random() * h;
-    const height = 1 + Math.random() * 4;
-    const alpha = 0.02 + Math.random() * 0.08;
-    ctx.fillStyle = Math.random() < 0.5 ? `rgba(255, 255, 255, ${alpha})` : `rgba(50, 30, 10, ${alpha})`;
+    const height = 1 + Math.random() * 3;
+    const alpha = 0.03 + Math.random() * 0.09;
+    ctx.fillStyle = Math.random() < 0.65 ? `rgba(220, 242, 255, ${alpha})` : `rgba(15, 32, 67, ${alpha})`;
     ctx.fillRect(0, y, w, height);
   }
   
@@ -78,19 +78,19 @@ function makeSaturnTexture(): THREE.CanvasTexture {
   const numWaves = 10;
   for (let k = 0; k < numWaves; k++) {
     const yCenter = 50 + Math.random() * (h - 100);
-    const waveAmp = 1 + Math.random() * 3;
-    const waveFreq = 4 + Math.random() * 8;
-    const alpha = 0.03 + Math.random() * 0.06;
+    const waveAmp = 1 + Math.random() * 3.5;
+    const waveFreq = 3 + Math.random() * 6;
+    const alpha = 0.03 + Math.random() * 0.07;
     
-    ctx.fillStyle = Math.random() < 0.5 ? `rgba(255, 245, 220, ${alpha})` : `rgba(70, 50, 30, ${alpha})`;
+    ctx.fillStyle = Math.random() < 0.5 ? `rgba(220, 242, 255, ${alpha})` : `rgba(40, 116, 166, ${alpha})`;
     ctx.beginPath();
     ctx.moveTo(0, yCenter);
     for (let x = 0; x <= w; x += 10) {
       const y = yCenter + Math.sin((x / w) * waveFreq * Math.PI * 2) * waveAmp;
       ctx.lineTo(x, y);
     }
-    ctx.lineTo(w, yCenter + 20);
-    ctx.lineTo(0, yCenter + 20);
+    ctx.lineTo(w, yCenter + 15);
+    ctx.lineTo(0, yCenter + 15);
     ctx.closePath();
     ctx.fill();
   }
@@ -100,17 +100,17 @@ function makeSaturnTexture(): THREE.CanvasTexture {
   for (let s = 0; s < numStorms; s++) {
     const sx = Math.random() * w;
     const sy = Math.random() < 0.5 ? 150 + Math.random() * 50 : 350 + Math.random() * 50;
-    const rx = 10 + Math.random() * 15;
-    const ry = 4 + Math.random() * 6;
-    const alpha = 0.05 + Math.random() * 0.1;
+    const rx = 10 + Math.random() * 14;
+    const ry = 4 + Math.random() * 5;
+    const alpha = 0.06 + Math.random() * 0.1;
     
-    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fillStyle = `rgba(225, 245, 255, ${alpha})`;
     ctx.beginPath();
     ctx.ellipse(sx, sy, rx, ry, 0, 0, Math.PI * 2);
     ctx.fill();
     
     // Storm trailing tail
-    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.5})`;
+    ctx.fillStyle = `rgba(225, 245, 255, ${alpha * 0.5})`;
     ctx.beginPath();
     ctx.ellipse(sx + rx * 1.5, sy, rx * 1.2, ry * 0.8, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -162,56 +162,56 @@ function makeRingTexture(innerRatio: number): THREE.CanvasTexture {
   // Create a high-fidelity radial gradient matching Saturn's rings profile
   const grad = ctx.createRadialGradient(cx, cy, rInner, cx, cy, rOuter);
   
-  // C Ring (0.0 to 0.25): Translucent, tan/amber dust
-  grad.addColorStop(0.0, "rgba(50, 40, 30, 0.0)");
-  grad.addColorStop(0.05, "rgba(90, 75, 55, 0.15)");
-  grad.addColorStop(0.15, "rgba(110, 95, 75, 0.25)");
-  grad.addColorStop(0.23, "rgba(80, 65, 50, 0.15)");
-  grad.addColorStop(0.25, "rgba(40, 30, 20, 0.05)");
+  // C Ring (0.0 to 0.25): Translucent pale steel blue
+  grad.addColorStop(0.0, "rgba(20, 40, 60, 0.0)");
+  grad.addColorStop(0.05, "rgba(50, 90, 120, 0.2)");
+  grad.addColorStop(0.15, "rgba(70, 110, 150, 0.3)");
+  grad.addColorStop(0.23, "rgba(40, 70, 100, 0.15)");
+  grad.addColorStop(0.25, "rgba(20, 30, 50, 0.04)");
   
-  // B Ring (0.25 to 0.65): Brightest, creamy gold/white ice
-  grad.addColorStop(0.26, "rgba(160, 135, 100, 0.6)");
-  grad.addColorStop(0.30, "rgba(220, 195, 160, 0.85)");
-  grad.addColorStop(0.40, "rgba(240, 215, 180, 0.95)");
-  grad.addColorStop(0.50, "rgba(215, 190, 155, 0.9)");
-  grad.addColorStop(0.58, "rgba(235, 210, 175, 0.95)");
-  grad.addColorStop(0.64, "rgba(180, 155, 120, 0.7)");
-  grad.addColorStop(0.65, "rgba(80, 65, 50, 0.2)");
+  // B Ring (0.25 to 0.65): Brightest, icy white and silver-blue
+  grad.addColorStop(0.26, "rgba(100, 160, 200, 0.6)");
+  grad.addColorStop(0.30, "rgba(180, 220, 240, 0.8)");
+  grad.addColorStop(0.40, "rgba(235, 245, 255, 0.95)"); // ice-white core
+  grad.addColorStop(0.50, "rgba(170, 210, 235, 0.85)");
+  grad.addColorStop(0.58, "rgba(200, 230, 250, 0.9)");
+  grad.addColorStop(0.64, "rgba(120, 170, 210, 0.65)");
+  grad.addColorStop(0.65, "rgba(50, 90, 130, 0.25)");
   
   // Cassini Division (0.65 to 0.70): Dark gap
-  grad.addColorStop(0.655, "rgba(20, 15, 10, 0.03)");
-  grad.addColorStop(0.68, "rgba(10, 8, 5, 0.01)");
-  grad.addColorStop(0.695, "rgba(20, 15, 10, 0.03)");
+  grad.addColorStop(0.655, "rgba(10, 20, 35, 0.03)");
+  grad.addColorStop(0.68, "rgba(5, 10, 20, 0.01)");
+  grad.addColorStop(0.695, "rgba(10, 20, 35, 0.03)");
   
-  // A Ring (0.70 to 0.95): Semi-bright, textured tan
-  grad.addColorStop(0.70, "rgba(120, 100, 80, 0.4)");
-  grad.addColorStop(0.74, "rgba(195, 170, 135, 0.7)");
-  grad.addColorStop(0.82, "rgba(175, 150, 120, 0.65)");
-  grad.addColorStop(0.88, "rgba(185, 160, 130, 0.7)");
+  // A Ring (0.70 to 0.95): Ice teal / cyan
+  grad.addColorStop(0.70, "rgba(70, 160, 180, 0.45)");
+  grad.addColorStop(0.74, "rgba(130, 210, 225, 0.75)");
+  grad.addColorStop(0.82, "rgba(100, 180, 200, 0.7)");
+  grad.addColorStop(0.88, "rgba(140, 220, 235, 0.75)");
   
   // Encke Gap (0.90 to 0.92)
-  grad.addColorStop(0.90, "rgba(130, 110, 85, 0.5)");
-  grad.addColorStop(0.908, "rgba(30, 25, 20, 0.04)");
-  grad.addColorStop(0.916, "rgba(30, 25, 20, 0.04)");
-  grad.addColorStop(0.924, "rgba(140, 120, 95, 0.6)");
+  grad.addColorStop(0.90, "rgba(90, 160, 180, 0.5)");
+  grad.addColorStop(0.908, "rgba(10, 25, 35, 0.04)");
+  grad.addColorStop(0.916, "rgba(10, 25, 35, 0.04)");
+  grad.addColorStop(0.924, "rgba(100, 170, 195, 0.55)");
   
-  // Outer edge fading
-  grad.addColorStop(0.95, "rgba(165, 140, 110, 0.6)");
-  grad.addColorStop(0.98, "rgba(80, 65, 50, 0.15)");
-  grad.addColorStop(1.0, "rgba(40, 30, 20, 0.0)");
+  // Outer edge fading (icy blue/violet)
+  grad.addColorStop(0.95, "rgba(130, 210, 225, 0.6)");
+  grad.addColorStop(0.98, "rgba(50, 110, 140, 0.2)");
+  grad.addColorStop(1.0, "rgba(20, 50, 70, 0.0)");
   
   ctx.fillStyle = grad;
   ctx.beginPath();
   ctx.arc(cx, cy, rOuter, 0, Math.PI * 2);
   ctx.fill();
   
-  // Draw concentric micro-bands for extra realism (fine texture)
+  // Draw concentric micro-bands with cyan / pink lines
   ctx.shadowBlur = 0;
   const fineLines = [0.1, 0.18, 0.32, 0.35, 0.44, 0.47, 0.53, 0.56, 0.62, 0.72, 0.77, 0.85, 0.94];
   for (const t of fineLines) {
     const r = rInner + (rOuter - rInner) * t;
-    const alpha = 0.05 + Math.random() * 0.12;
-    ctx.strokeStyle = Math.random() < 0.6 ? `rgba(255, 245, 230, ${alpha})` : `rgba(30, 22, 15, ${alpha})`;
+    const alpha = 0.08 + Math.random() * 0.15;
+    ctx.strokeStyle = Math.random() < 0.65 ? `rgba(235, 245, 255, ${alpha})` : `rgba(30, 80, 110, ${alpha})`;
     ctx.lineWidth = 0.5 + Math.random() * 1.5;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -300,8 +300,8 @@ export class Space {
       map: makeSaturnTexture(),
       roughness: 0.85, // soft gas sheen
       metalness: 0.05,
-      emissive: 0x0c0906,
-      emissiveIntensity: 0.9,
+      emissive: 0x030812, // deep celestial blue base emission
+      emissiveIntensity: 0.8,
       fog: false,
     });
     const globe = new THREE.Mesh(new THREE.SphereGeometry(R, 64, 64), globeMat);
@@ -309,7 +309,7 @@ export class Space {
 
     // --- Thin atmosphere rim (back-side additive shell glows at the limb). ---
     const atmoMat = new THREE.MeshBasicMaterial({
-      color: 0xffe8bd, // warm golden glowing atmospheric rim
+      color: 0x8be8ff, // pale ice-blue atmospheric rim
       transparent: true,
       opacity: 0.22,
       side: THREE.BackSide,
