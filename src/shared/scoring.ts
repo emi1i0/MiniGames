@@ -3,7 +3,13 @@ import type { Direction, GameScoring } from "./scoring-core";
 // Re-exporta el modulo hoja para que los importadores existentes (Game.ts,
 // Hud.ts, etc.) sigan usando `.../shared/scoring` sin cambios.
 export type { Direction, GameScoring } from "./scoring-core";
-export { encodeTimeMoves, formatTimeMoves, formatClock } from "./scoring-core";
+export {
+  encodeTimeMoves,
+  formatTimeMoves,
+  encodeMovesTime,
+  formatMovesTime,
+  formatClock,
+} from "./scoring-core";
 
 /**
  * Configuracion de ranking por juego, auto-descubierta: cada juego declara un

@@ -9,13 +9,12 @@ export const ROWS = 3;
 export const HOLE_RX = 95;
 export const HOLE_RY = 34;
 
-// ── Ronda a tiempo ──────────────────────────────────────────────────
+// ── Vidas (modo solo) ───────────────────────────────────────────────
 /**
- * Tanto en solo como en salas la partida es a tiempo: dura este tanto y gana
- * quien mas puntos hizo. En salas el host puede fijar un tope de ronda menor
- * que corta el parcial antes (ver CLAUDE.md).
+ * En solo la partida es por vidas: empiezas con estas y solo pierdes una al
+ * golpear una bomba. La partida termina al llegar a 0.
  */
-export const ROUND_SEC = 60;
+export const INITIAL_LIVES = 3;
 
 // ── Countdown (obligatorio, ver root CLAUDE.md) ─────────────────────
 export const COUNTDOWN_LABELS = ["3", "2", "1", "YA"];

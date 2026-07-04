@@ -201,12 +201,10 @@ a {
 .rooms-banner__scrim {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    rgba(10, 10, 14, 0.92) 0%,
-    rgba(10, 10, 14, 0.72) 45%,
-    rgba(10, 10, 14, 0.35) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(10, 10, 14, 0.92) 0%,
+      rgba(10, 10, 14, 0.72) 45%,
+      rgba(10, 10, 14, 0.35) 100%);
 }
 
 .rooms-banner__text {
@@ -326,14 +324,47 @@ a {
 }
 
 /* Nombre del juego debajo del recuadro. */
-.game-card__name {
+.game-card__head {
   margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.game-card__name {
+  flex: 0 1 auto;
+  min-width: 0;
   font-size: 23px;
   font-weight: 700;
   letter-spacing: -0.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Lider (Top 1) del ranking, junto al nombre del juego. */
+.game-card__champ {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  margin-right: 20px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #b8860b;
+}
+
+.game-card__crown {
+  flex-shrink: 0;
+  color: #e6a817;
+}
+
+.game-card__champ-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Chips superpuestos a la portada (la imagen ya trae el nombre del juego). */
@@ -406,11 +437,9 @@ a {
   position: absolute;
   inset: 0;
   z-index: -1;
-  background: repeating-linear-gradient(
-    0deg,
-    rgba(255, 255, 255, 0.02) 0 1px,
-    transparent 1px 4px
-  );
+  background: repeating-linear-gradient(0deg,
+      rgba(255, 255, 255, 0.02) 0 1px,
+      transparent 1px 4px);
   pointer-events: none;
 }
 
@@ -595,16 +624,32 @@ a {
 }
 
 @keyframes marquee-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 @keyframes coin-blink {
-  0%, 55% { opacity: 1; }
-  56%, 100% { opacity: 0.25; }
+
+  0%,
+  55% {
+    opacity: 1;
+  }
+
+  56%,
+  100% {
+    opacity: 0.25;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+
   .site-footer__strip,
   .site-footer__coin-dot {
     animation: none;

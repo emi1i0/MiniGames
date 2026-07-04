@@ -20,7 +20,7 @@ export const VISIBLE_LEVELS_AHEAD = 5;
 export const VISIBLE_LEVELS_BEHIND = 2;
 
 // Input constants
-export const ROTATION_SPEED_KEYBOARD = 3.0; // rads per second
+export const ROTATION_SPEED_KEYBOARD = 5.5; // rads per second
 export const ROTATION_SPEED_POINTER = 0.007; // rads per pixel
 export const ROTATION_LERP = 0.15; // smoothing
 
@@ -28,7 +28,7 @@ export const ROTATION_LERP = 0.15; // smoothing
 export const CAM_FOV = 60;
 export const CAM_HEIGHT_OFFSET = 2.2;
 export const CAM_BACK = 6.0;
-export const CAM_LOOK_Y_OFFSET = -0.5;
+export const CAM_LOOK_Y_OFFSET = -1.5;
 export const CAM_LERP = 0.1;
 
 // Combo mechanics
