@@ -1,6 +1,6 @@
-# Space Jump
+# Space Rush
 
-(Display title "Space Jump"; the id stays `vector-rush` everywhere — folder,
+(Display title "Space Rush"; the id stays `vector-rush` everywhere — folder,
 paths, storage key `vector-rush-best`, scoring, room id.)
 
 A 2.5D space ship-runner. The player pilots a star fighter through a wide open flight corridor in deep space, steering **left / right / up / down** to weave through fields of drifting space debris. Obstacles travel toward the ship along -Z and everything speeds up over time. Visual style is **space**: a deep parallax starfield, a huge close **ringed Saturn** (only partly in frame, banded rings sweeping across — modeled on a real Cassini-style close-up) plus a distant moon, faint rectangular corridor outlines marking the flight lane, lit tumbling debris, a white engine particle trail, a **fixed camera looking straight down the corridor axis**, and a **crash fireball** (particles + red flash + camera shake). `UnrealBloomPass` gives the glow.
