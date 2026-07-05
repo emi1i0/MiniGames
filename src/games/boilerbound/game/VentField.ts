@@ -50,6 +50,8 @@ export class VentField {
   private patternTimer = 1.2;
   private elapsed = 0;
   private playerX = 0;
+  /** The first wave of a run gets a long warning so a new player can read it. */
+  private firstWave = true;
 
   private overload = false;
   private overloadTimer = 0;
@@ -180,18 +182,25 @@ export class VentField {
   }
 
   /**
-   * A moving wall of steam sweeping the room. The per-column stagger is kept
-   * slower than the player's run speed (`CELL_WIDTH / PLAYER_SPEED`) at low
-   * levels so it can be escaped by running through the just-cleared columns
-   * behind the front; it tightens with level (dash / walls needed).
+   * A thin wall of steam sweeping the room. The front advances one column per
+   * `step` (accelerating with level), while each vent's *short* life keeps the
+   * lethal band only ~2 columns wide — thin enough to punch through with a dash
+   * (its i-frames) to the already-cleared side. That dash-through is the
+   * intended escape: a wide band can't be crossed (dash is ~2 cells) nor climbed
+   * over (a jet is taller than the max jump), so running ahead only corners you.
+   * Difficulty scales via a faster front, NOT a wider (uncrossable) band.
    */
   private launchWave(warn: number): void {
     const leftToRight = Math.random() < 0.5;
-    const safeStep = CELL_WIDTH / PLAYER_SPEED; // the wave-front speed the player can just match
-    const step = Math.max(safeStep * 0.72, safeStep * 1.35 - this.level * 0.012);
+    const step = Math.max(0.2, 0.34 - this.level * 0.01); // front speeds up with level
+    const waveActive = Math.min(ACTIVE_TIME, step * 2.0); // lethal band ~2 columns wide
+    // Teach the pattern: the very first wave telegraphs much longer so a
+    // first-time player can watch the red sweep before anything erupts.
+    const waveWarn = this.firstWave ? Math.max(warn, 1.9) : warn;
+    this.firstWave = false;
     for (let n = 0; n < VENT_COUNT; n++) {
       const index = leftToRight ? n : VENT_COUNT - 1 - n;
-      this.queue.push({ index, delay: n * step, warn, active: ACTIVE_TIME });
+      this.queue.push({ index, delay: n * step, warn: waveWarn, active: waveActive });
     }
   }
 
@@ -222,6 +231,7 @@ export class VentField {
     for (const v of this.vents) v.reset();
     this.queue.length = 0;
     this.patternTimer = 1.2;
+    this.firstWave = true;
     this.elapsed = 0;
     this.overload = false;
     this.overloadTimer = 0;
