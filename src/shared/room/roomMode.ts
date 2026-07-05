@@ -323,10 +323,11 @@ class RoomModeController implements RoomMode {
     }
 
     if (room.status === "lobby") {
-      // El host (que apreto "Volver a la sala") y quien todavia no vio el tablero
-      // final van directo al lobby. Pero a los invitados que estan mirando los
-      // resultados NO se los arrastra: se quedan hasta que ellos elijan volver.
-      if (this.isHost() || !this.finalShown) {
+      // Solo quien todavia no vio el tablero final va directo al lobby. A los que
+      // estan mirando los resultados NO se los arrastra cuando OTRO resetea la
+      // sala (incluido el host): se quedan en el tablero final con su propio boton
+      // "Volver a la sala". El que apreto el boton se navega solo (returnToLobby).
+      if (!this.finalShown) {
         this.navigate(`/rooms/?code=${this.code}`);
         return;
       }
