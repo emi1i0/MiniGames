@@ -84,6 +84,7 @@ export interface RoomMode {
 /** Variante fija que usa cada juego con variantes cuando corre en modo sala. */
 export const ROOM_VARIANTS: Record<string, string> = {
   "sliding-puzzle": "3",
+  "lights-out": "5",
 };
 
 /** Chequeo barato (sin red) de si la pagina corre en modo sala. */
