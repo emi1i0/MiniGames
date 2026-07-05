@@ -70,6 +70,9 @@ export class Hud {
 
   setScore(score: number): void {
     this.scoreEl.textContent = String(score);
+    this.scoreEl.classList.remove("pop");
+    void this.scoreEl.offsetWidth; // force reflow
+    this.scoreEl.classList.add("pop");
   }
 
   setBest(best: number): void {
@@ -82,6 +85,7 @@ export class Hud {
     this.timerFillEl.style.width = `${f * 100}%`;
     const hue = f * 110; // 0 = red, 110 = green
     this.timerFillEl.style.background = `hsl(${hue}, 80%, 50%)`;
+    this.timerFillEl.style.setProperty('--glow-color', `hsl(${hue}, 80%, 60%)`);
   }
 
   showTimer(visible: boolean): void {

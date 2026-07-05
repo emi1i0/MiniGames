@@ -10,6 +10,8 @@ const cloudGeo = flatGeo(new THREE.IcosahedronGeometry(1, 1));
 export class Environment {
   readonly group = new THREE.Group();
   private readonly clouds: { mesh: THREE.Object3D; speed: number }[] = [];
+  private readonly fireflies: THREE.Mesh[] = [];
+  private readonly bgTrees: { group: THREE.Group; baseY: number; phase: number; speed: number }[] = [];
 
   constructor() {
     this.buildHills();
@@ -17,6 +19,7 @@ export class Environment {
     this.buildBushes();
     this.buildRocks();
     this.buildBackgroundTrees();
+    this.buildFireflies();
   }
 
   update(dt: number): void {
@@ -24,10 +27,26 @@ export class Environment {
       c.mesh.position.x += c.speed * dt;
       if (c.mesh.position.x > 22) c.mesh.position.x = -22;
     }
+
+    const time = performance.now() * 0.001;
+    this.fireflies.forEach((f, idx) => {
+      f.position.y += (0.15 + (idx % 5) * 0.05) * dt;
+      if (f.position.y > 8.0) {
+        f.position.y = 0;
+      }
+      f.position.x += Math.sin(time + idx) * 0.25 * dt;
+      f.position.z += Math.cos(time + idx * 1.5) * 0.25 * dt;
+    });
+
+    this.bgTrees.forEach((t) => {
+      t.group.position.y = t.baseY + Math.sin(time * t.speed + t.phase) * 0.25;
+      t.group.rotation.z = Math.sin(time * t.speed * 0.5 + t.phase) * 0.04;
+      t.group.rotation.x = Math.cos(time * t.speed * 0.5 + t.phase) * 0.02;
+    });
   }
 
   private buildHills(): void {
-    const tones = ["#5fa63c", "#6fb84a", "#7cc656"];
+    const tones = ["#2b1029", "#3c163b", "#4e1b4d"];
     const specs = [
       { x: -10, z: -16, s: 11, t: 0 },
       { x: 12, z: -18, s: 13, t: 0 },
@@ -47,7 +66,7 @@ export class Environment {
   }
 
   private buildClouds(): void {
-    const white = toon("#ffffff");
+    const white = toon("#f3caef");
     const specs = [
       { x: -8, y: 9, z: -12, s: 1.5 },
       { x: 6, y: 11, z: -14, s: 1.9 },
@@ -95,7 +114,7 @@ export class Environment {
   }
 
   private buildRocks(): void {
-    const rock = toon("#9aa0a6");
+    const rock = toon("#382b3d");
     const specs = [
       { x: -4.5, z: 0.2, s: 0.7 },
       { x: 4.4, z: -0.6, s: 0.55 },
@@ -112,7 +131,8 @@ export class Environment {
   }
 
   private buildBackgroundTrees(): void {
-    const trunkMat = toon("#8f5f2f");
+    const trunkMat = toon("#331e17");
+    const rockMat = toon("#382b3d");
     const specs = [
       { x: -8, z: -6, s: 1.2 },
       { x: 8.5, z: -7, s: 1.4 },
@@ -122,13 +142,46 @@ export class Environment {
       const tree = new THREE.Group();
       const trunk = outlined(new THREE.CylinderGeometry(0.4, 0.5, 3, 10), trunkMat);
       trunk.position.y = 1.5;
+
       const crown = outlined(leafGeo, toon(LEAF_COLORS[1]), 1.05);
       crown.scale.setScalar(1.8);
       crown.position.y = 3.8;
-      tree.add(trunk, crown);
-      tree.position.set(t.x, 0, t.z);
+
+      // Floating island rock base
+      const islandBase = outlined(new THREE.ConeGeometry(0.9, 1.2, 5), rockMat);
+      islandBase.rotation.x = Math.PI; // point down
+      islandBase.position.y = -0.6;
+
+      tree.add(trunk, crown, islandBase);
+
+      const baseY = 1.2 + Math.random() * 0.8;
+      tree.position.set(t.x, baseY, t.z);
       tree.scale.setScalar(t.s);
+
       this.group.add(tree);
+      this.bgTrees.push({
+        group: tree,
+        baseY,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.7 + Math.random() * 0.5
+      });
+    }
+  }
+
+  private buildFireflies(): void {
+    const geo = new THREE.SphereGeometry(0.06, 6, 6);
+    const mat = new THREE.MeshBasicMaterial({ color: 0xfff68f });
+    for (let i = 0; i < 35; i++) {
+      const mesh = new THREE.Mesh(geo, mat);
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 2.5 + Math.random() * 5.0;
+      mesh.position.set(
+        Math.cos(angle) * radius,
+        Math.random() * 8.0,
+        Math.sin(angle) * radius
+      );
+      this.group.add(mesh);
+      this.fireflies.push(mesh);
     }
   }
 }

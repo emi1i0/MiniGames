@@ -35,6 +35,15 @@ interface FlyingLog {
   life: number;
 }
 
+interface FlyingLeaf {
+  mesh: THREE.Group;
+  vel: THREE.Vector3;
+  rotSpeed: THREE.Vector3;
+  life: number;
+  maxLife: number;
+  startScale: number;
+}
+
 const TRUNK_SHADES = [toon(TRUNK_COLOR_A), toon(TRUNK_COLOR_B)];
 const RING_MAT = toon(TRUNK_RING_COLOR);
 const BRANCH_MAT = toon(BRANCH_COLOR);
@@ -51,6 +60,7 @@ export class Tree {
   private segments: Segment[] = [];
   private dropOffset = 0;
   private readonly flying: FlyingLog[] = [];
+  private readonly flyingLeaves: FlyingLeaf[] = [];
   private recentSides: Side[] = [];
 
   constructor() {
@@ -71,6 +81,8 @@ export class Tree {
     });
     for (const log of this.flying) this.group.remove(log.group);
     this.flying.length = 0;
+    for (const leaf of this.flyingLeaves) this.group.remove(leaf.mesh);
+    this.flyingLeaves.length = 0;
     this.layout();
   }
 
@@ -86,6 +98,7 @@ export class Tree {
   chop(side: Side): void {
     const bottom = this.segments.shift()!;
     this.spawnFlyingLog(bottom, side);
+    this.spawnLeafBurst(side, bottom.group.position.y);
     // Recycle the bottom segment as the new top one.
     const branch = this.rollBranch();
     this.applySegment(bottom, branch, Math.random() < 0.5 ? 0 : 1);
@@ -111,6 +124,26 @@ export class Tree {
       if (log.life <= 0) {
         this.group.remove(log.group);
         this.flying.splice(i, 1);
+      }
+    }
+
+    for (let i = this.flyingLeaves.length - 1; i >= 0; i--) {
+      const leaf = this.flyingLeaves[i];
+      leaf.vel.y -= 9.8 * dt; // Gravity
+      leaf.vel.x *= 1 - 1.5 * dt; // Damping
+      leaf.vel.z *= 1 - 1.5 * dt;
+      leaf.mesh.position.addScaledVector(leaf.vel, dt);
+      leaf.mesh.rotation.x += leaf.rotSpeed.x * dt;
+      leaf.mesh.rotation.y += leaf.rotSpeed.y * dt;
+      leaf.mesh.rotation.z += leaf.rotSpeed.z * dt;
+      leaf.life -= dt;
+
+      const scaleFrac = Math.max(0, leaf.life / leaf.maxLife);
+      leaf.mesh.scale.setScalar(scaleFrac * leaf.startScale);
+
+      if (leaf.life <= 0) {
+        this.group.remove(leaf.mesh);
+        this.flyingLeaves.splice(i, 1);
       }
     }
   }
@@ -184,6 +217,48 @@ export class Tree {
       spin: away * (6 + Math.random() * 4),
       life: 1.4,
     });
+  }
+
+  private spawnLeafBurst(chopSide: Side, yPos: number): void {
+    const leafCount = 8 + Math.floor(Math.random() * 5);
+    const away = chopSide === "left" ? 1 : -1;
+
+    for (let i = 0; i < leafCount; i++) {
+      const mat = LEAF_MATS[Math.floor(Math.random() * LEAF_MATS.length)];
+      const leafGroup = outlined(leafGeo, mat, 1.1).clone();
+      const startScale = 0.12 + Math.random() * 0.16;
+      leafGroup.scale.setScalar(startScale);
+
+      // Spawn near the bottom segment trunk surface
+      leafGroup.position.set(
+        (Math.random() - 0.5) * 0.9,
+        yPos + (Math.random() - 0.5) * 0.6,
+        (Math.random() - 0.5) * 0.9
+      );
+
+      this.group.add(leafGroup);
+
+      const vel = new THREE.Vector3(
+        away * (2.5 + Math.random() * 4.5),
+        2.5 + Math.random() * 3.5,
+        (Math.random() - 0.5) * 3.5
+      );
+
+      const rotSpeed = new THREE.Vector3(
+        (Math.random() - 0.5) * 8.0,
+        (Math.random() - 0.5) * 8.0,
+        (Math.random() - 0.5) * 8.0
+      );
+
+      this.flyingLeaves.push({
+        mesh: leafGroup,
+        vel,
+        rotSpeed,
+        life: 0.9 + Math.random() * 0.5,
+        maxLife: 0.9 + Math.random() * 0.5,
+        startScale,
+      });
+    }
   }
 }
 

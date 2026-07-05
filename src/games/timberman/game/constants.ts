@@ -4,19 +4,19 @@
 export const BEST_SCORE_KEY = "mg:timberman:best";
 
 /** Colors (cartoon palette). */
-export const SKY_TOP_COLOR = "#5bb8e8";
-export const SKY_BOTTOM_COLOR = "#cdeef0";
-export const GROUND_COLOR = "#7ac74f";
-export const GROUND_EDGE_COLOR = "#8a5a34";
-export const TRUNK_COLOR_A = "#a9743d";
-export const TRUNK_COLOR_B = "#8f5f2f";
-export const TRUNK_RING_COLOR = "#e7c48a";
-export const BRANCH_COLOR = "#7c5127";
-export const LEAF_COLORS = ["#66c14a", "#4fa838", "#84d05a"];
+export const SKY_TOP_COLOR = "#0c051a";
+export const SKY_BOTTOM_COLOR = "#fa709a";
+export const GROUND_COLOR = "#4a1c40";
+export const GROUND_EDGE_COLOR = "#2a0e24";
+export const TRUNK_COLOR_A = "#5c3d2e";
+export const TRUNK_COLOR_B = "#432b20";
+export const TRUNK_RING_COLOR = "#d9ad7c";
+export const BRANCH_COLOR = "#3e2723";
+export const LEAF_COLORS = ["#ff5e7e", "#ff2e63", "#ff7a8a"];
 
 /** Geometry. */
 export const TRUNK_RADIUS = 0.72;
-export const SEG_HEIGHT = 1.15;
+export const SEG_HEIGHT = 1.725;
 /** How many trunk segments are stacked/visible above the base at once. */
 export const VISIBLE_SEGMENTS = 9;
 /** X offset where the lumberjack stands on each side (world units). */

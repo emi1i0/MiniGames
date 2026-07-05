@@ -90,8 +90,8 @@ export class Game {
     this.composer.addPass(this.bloomPass);
     this.composer.addPass(new OutputPass());
 
-    this.scene.add(new THREE.HemisphereLight(0xdff2ff, 0x6a8a4a, 1.0));
-    const sun = new THREE.DirectionalLight(0xfff0d0, 1.7);
+    this.scene.add(new THREE.HemisphereLight(0xe8a7d7, 0x2b1029, 1.2));
+    const sun = new THREE.DirectionalLight(0xffe6b3, 1.8);
     sun.position.set(6, 12, 7);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -105,7 +105,7 @@ export class Game {
     sun.shadow.camera.top = s + 5;
     sun.shadow.camera.bottom = -s;
     this.scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xbfd8ff, 0.35);
+    const fill = new THREE.DirectionalLight(0x8c52ff, 0.55);
     fill.position.set(-6, 4, -3);
     this.scene.add(fill);
 
