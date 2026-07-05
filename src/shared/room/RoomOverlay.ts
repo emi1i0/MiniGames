@@ -458,6 +458,19 @@ export class RoomOverlay {
     this.boxEl.append(actions);
   }
 
+  /**
+   * Modo espectador: el jugador entro con la partida ya empezada. No juega ni
+   * puntua, solo espera a que termine (recien ahi podra sumarse a la revancha).
+   */
+  showSpectator(): void {
+    this.show();
+    this.addKicker("Sala");
+    this.addTitle("Modo espectador");
+    this.addSubtitle(
+      "La partida ya empezo, asi que la miras desde afuera. Vas a poder jugar cuando termine y el anfitrion abra una nueva.",
+    );
+  }
+
   /** Error terminal (sala inexistente, etc.). */
   showError(message: string): void {
     this.show();
