@@ -2,6 +2,14 @@ import { CHAMBERS } from "./constants";
 import type { RunResult } from "./Game";
 import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
 
+/** Un jugador en el panel de "como le va al resto de la sala". */
+export interface LivePlayer {
+  name: string;
+  frases: number;
+  dead: boolean;
+  me: boolean;
+}
+
 /** DOM del juego: barra de estado, revolver, escenario de tecleo, overlays. */
 export class Hud {
   // HUD bar
@@ -9,6 +17,8 @@ export class Hud {
   private readonly survivorsEl: HTMLDivElement;
   private readonly roundEl: HTMLDivElement;
   private readonly frasesEl: HTMLDivElement;
+  private readonly ppmEl: HTMLDivElement;
+  private readonly livePanelEl: HTMLDivElement;
 
   // Escenario
   private readonly stage: HTMLDivElement;
@@ -40,7 +50,11 @@ export class Hud {
     this.survivorsEl = this.makeStat("VIVOS", "fs-hud__survivors");
     this.roundEl = this.makeStat("SENTENCIA", "fs-hud__round");
     this.frasesEl = this.makeStat("SUPERADAS", "fs-hud__frases");
-    this.hudBar.append(this.survivorsEl, this.roundEl, this.frasesEl);
+    this.ppmEl = this.makeStat("PPM", "fs-hud__ppm");
+    this.hudBar.append(this.survivorsEl, this.roundEl, this.frasesEl, this.ppmEl);
+
+    // Panel lateral con el progreso del resto de la sala (solo modo sala).
+    this.livePanelEl = this.div("fs-live hidden");
 
     // --- Escenario ---
     this.stage = document.createElement("div");
@@ -93,6 +107,7 @@ export class Hud {
     container.append(
       this.stage,
       this.hudBar,
+      this.livePanelEl,
       this.overlayEl,
       this.countdownEl,
       this.flashEl,
@@ -192,6 +207,37 @@ export class Hud {
 
   setFrases(n: number): void {
     this.num(this.frasesEl).textContent = String(n);
+  }
+
+  setPpm(n: number): void {
+    this.num(this.ppmEl).textContent = String(n);
+  }
+
+  /** Muestra el panel de progreso de sala (solo cuando hay `?room=`). */
+  enableLivePanel(): void {
+    this.livePanelEl.classList.remove("hidden");
+  }
+
+  /** Ranking en vivo del resto de la sala (ya ordenado por frases desc). */
+  setLivePlayers(list: LivePlayer[]): void {
+    this.livePanelEl.innerHTML = "";
+    const title = this.div("fs-live__title");
+    title.textContent = "EN LA SALA";
+    this.livePanelEl.append(title);
+
+    list.forEach((pl, i) => {
+      const row = this.div(
+        "fs-live__row" + (pl.me ? " is-me" : "") + (pl.dead ? " is-dead" : ""),
+      );
+      const rank = this.div("fs-live__rank");
+      rank.textContent = pl.dead ? "x" : String(i + 1);
+      const name = this.div("fs-live__name");
+      name.textContent = pl.name;
+      const frs = this.div("fs-live__frases");
+      frs.textContent = String(pl.frases);
+      row.append(rank, name, frs);
+      this.livePanelEl.append(row);
+    });
   }
 
   setChamber(loaded: number): void {

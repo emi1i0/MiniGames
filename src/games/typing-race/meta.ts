@@ -1,5 +1,6 @@
 import type { GameEntry } from "../../games";
 import type { GameScoring } from "../../shared/scoring-core";
+import { decodeScore } from "./game/constants";
 
 export const meta: GameEntry = {
   id: "typing-race",
@@ -13,13 +14,17 @@ export const meta: GameEntry = {
 };
 
 /**
- * Puntaje = frases superadas (mayor = mejor). Se usa una variante propia
- * ("survival") para que el ranking arranque limpio y no se mezcle con los
- * puntajes de PPM del juego anterior (otra escala, otra metrica).
+ * Puntaje codificado = frases superadas (primario) + ppm (desempate), ver
+ * `encodeScore`. Asi el ranking (global y de sala) ordena primero por frases y
+ * despues por velocidad. Variante propia ("final") para arrancar con un tablero
+ * limpio (el score cambio de escala respecto de "Mecano" y de la version previa).
  */
 export const scoring: GameScoring = {
   direction: "higher",
-  variants: ["survival"],
+  variants: ["final"],
   variantLabel: () => "Supervivencia",
-  format: (n) => `${n} ${n === 1 ? "frase" : "frases"}`,
+  format: (n) => {
+    const { frases, ppm } = decodeScore(n);
+    return `${frases} ${frases === 1 ? "frase" : "frases"} · ${ppm} ppm`;
+  },
 };

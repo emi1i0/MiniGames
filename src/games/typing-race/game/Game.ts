@@ -4,6 +4,7 @@ import {
   CLEAN_SENTENCE_RELIEF,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
+  encodeScore,
   MAX_DT,
   PRESSURE_FLOOR,
   ROUND_PRESSURE,
@@ -15,8 +16,9 @@ import {
   TIME_PER_CHAR,
   TIMEOUT_BULLETS,
 } from "./constants";
-import { Hud } from "./Hud";
+import { Hud, type LivePlayer } from "./Hud";
 import { SoundEffects } from "./SoundEffects";
+import { TypingChannel, type Progress } from "./TypingChannel";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
 
 type State = "ready" | "countdown" | "playing" | "roulette" | "gameOver";
@@ -70,9 +72,13 @@ export class Game {
   private totalKeystrokes = 0;
   private timeElapsed = 0;
 
-  // Pendientes entre la frase y la resolucion del gatillo.
+  // Pendiente entre la frase y la resolucion del gatillo.
   private completedThisSentence = false;
-  private pendingPerfect = false;
+
+  // Progreso en vivo del resto de la sala (nickname -> progreso).
+  private channel: TypingChannel | null = null;
+  private readonly others = new Map<string, Progress>();
+  private lastBroadcast = 0;
 
   private bestFrases: number | null = null;
 
@@ -88,11 +94,18 @@ export class Game {
     this.hud = new Hud(container);
     this.hud.showStart(this.bestFrases);
 
-    // Parcial por timeout de sala: las frases superadas hasta el momento.
+    // Parcial por timeout de sala: frases superadas + ppm hasta el momento.
     this.room = initRoomMode("typing-race", {
-      getScore: () => this.frases,
+      getScore: () => encodeScore(this.frases, this.liveWpm()),
       onStart: () => this.beginCountdown(),
     });
+
+    // En sala: canal para ver el progreso del resto en vivo.
+    if (this.room) {
+      this.channel = new TypingChannel(this.room.code);
+      this.channel.onProgress((pr) => this.onOthers(pr));
+      this.hud.enableLivePanel();
+    }
 
     window.addEventListener("keydown", this.handleKeyDown);
 
@@ -203,6 +216,44 @@ export class Game {
     this.state = "playing";
     this.hud.showPlay();
     this.hud.renderSentence(this.target, this.pos);
+    this.hud.setPpm(this.liveWpm());
+    this.broadcastProgress();
+  }
+
+  private liveWpm(): number {
+    const minutes = this.timeElapsed / 60;
+    return minutes > 0 ? Math.round(this.correctKeystrokes / 5 / minutes) : 0;
+  }
+
+  // ---------- Progreso en vivo de la sala ----------
+
+  private onOthers(pr: Progress): void {
+    this.others.set(pr.p, pr);
+    if (this.room) this.hud.setLivePlayers(this.buildLive());
+  }
+
+  private buildLive(): LivePlayer[] {
+    const me = this.room!.me;
+    const dead = this.state === "gameOver";
+    const list: LivePlayer[] = this.room!.players().map((name) => {
+      if (name === me) return { name, frases: this.frases, dead, me: true };
+      const pr = this.others.get(name);
+      return { name, frases: pr?.f ?? 0, dead: pr?.d ?? false, me: false };
+    });
+    list.sort((a, b) => b.frases - a.frases || (a.name < b.name ? -1 : 1));
+    return list;
+  }
+
+  private broadcastProgress(): void {
+    if (!this.room || !this.channel) return;
+    this.lastBroadcast = performance.now();
+    this.channel.send({
+      p: this.room.me,
+      f: this.frases,
+      c: this.chamber,
+      d: this.state === "gameOver",
+    });
+    this.hud.setLivePlayers(this.buildLive());
   }
 
   // ---------- Gatillo (ruleta) ----------
@@ -210,8 +261,14 @@ export class Game {
   private completeSentence(timedOut: boolean): void {
     this.state = "roulette";
     this.completedThisSentence = !timedOut;
-    this.pendingPerfect = !timedOut && this.errorsThisSentence === 0;
-    if (timedOut) this.chamber = Math.min(CHAMBERS, this.chamber + TIMEOUT_BULLETS);
+
+    if (timedOut) {
+      this.chamber = Math.min(CHAMBERS, this.chamber + TIMEOUT_BULLETS);
+    } else if (this.errorsThisSentence === 0) {
+      // Frase perfecta: sacas una bala ANTES de jalar el gatillo (baja el riesgo
+      // de esta misma ruleta). Simetrico a "cada error carga una bala".
+      this.chamber = Math.max(0, this.chamber - CLEAN_SENTENCE_RELIEF);
+    }
 
     this.hud.setChamber(this.chamber);
     this.hud.startTriggerPull(this.chamber, timedOut);
@@ -232,10 +289,10 @@ export class Game {
 
     SoundEffects.playClick();
     if (this.completedThisSentence) this.frases++;
-    if (this.pendingPerfect) this.chamber = Math.max(0, this.chamber - CLEAN_SENTENCE_RELIEF);
     this.updateSurvivors();
     this.round++;
     this.hud.showClickRelief(this.chamber, this.frases);
+    this.broadcastProgress();
     window.setTimeout(() => this.nextSentence(), SURVIVE_HOLD_MS);
   }
 
@@ -273,8 +330,7 @@ export class Game {
       isNewBest = true;
     }
 
-    const minutes = this.timeElapsed / 60;
-    const wpm = minutes > 0 ? Math.round(this.correctKeystrokes / 5 / minutes) : 0;
+    const wpm = this.liveWpm();
     const accuracy =
       this.totalKeystrokes > 0
         ? Math.round((this.correctKeystrokes / this.totalKeystrokes) * 100)
@@ -292,8 +348,14 @@ export class Game {
 
     this.hud.showGameOver(result, isNewBest, this.bestFrases ?? 0);
 
-    if (this.room) this.room.reportScore(score);
-    else this.hud.showRanking("typing-race", score, "survival");
+    // Ranking (global y sala): frases primero, ppm como desempate (score codificado).
+    const ranked = encodeScore(score, wpm);
+    if (this.room) {
+      this.room.reportScore(ranked);
+      this.broadcastProgress(); // avisa a la sala que cai (dead=true)
+    } else {
+      this.hud.showRanking("typing-race", ranked, "final");
+    }
   }
 
   // ---------- Loop ----------
@@ -320,6 +382,8 @@ export class Game {
     } else if (this.state === "playing") {
       this.timeElapsed += dt;
       this.timeLeft -= dt;
+      this.hud.setPpm(this.liveWpm());
+      if (this.room && performance.now() - this.lastBroadcast > 2000) this.broadcastProgress();
       if (this.timeLeft <= 0) {
         this.timeLeft = 0;
         this.hud.setTimer(0, this.timeLimit);
