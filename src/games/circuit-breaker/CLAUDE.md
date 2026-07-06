@@ -1,0 +1,112 @@
+# Circuit Breaker
+
+Recreacion del **VLSI Circuit Breaker 2.0** de GTA Online. Hay un area abierta
+(corredores) sobre una placa de circuitos; llevas una senal desde el pad de origen
+(A, abajo-izquierda) hasta el conector destino (B, arriba-derecha) **sin tocar las
+paredes**. Si tocas una pared = choque: la senal vuelve al inicio y se cuenta.
+
+## Mecanica (clave)
+
+- **La senal avanza sola** (un circulo, `SIGNAL_RADIUS`) a `SPEED` px/seg en `dir`;
+  el jugador SOLO cambia la direccion (`setDir`, 4 direcciones) con WASD/flechas (o
+  swipe en tactil). NO hay colision de deslizamiento: la deteccion de pared es
+  "tocar = perder". `startDir` (derecha) es la direccion inicial segura; se restaura
+  al arrancar y tras cada choque.
+- **Paredes mortales**: `hitsWall` testea el circulo contra las celdas de pared
+  (`#`) y contra el borde del tablero. Si toca => `crash`: `state = "crash"`,
+  flash rojo + sacudida + banner "CHOQUE" durante `CRASH_FREEZE`, `crashes++`, y
+  la senal vuelve a `startCenter`. El tiempo de la corrida sigue corriendo durante
+  el choque (penaliza chocar).
+- **Llegar a B** (`< CELL*0.7` del centro) => `win`.
+- Movimiento por substeps dentro de `updatePlaying` para no atravesar paredes finas
+  en frames largos.
+- Controles: flechas / WASD para girar (la senal avanza sola) o swipe en tactil.
+  Enter/tap para empezar y reintentar.
+
+## Puntaje
+
+- **Tiempo que tardo + veces que choco** (menor es mejor). Se codifica con
+  `encodeTimeMoves(segundos, choques)` de `scoring-core` (el tiempo manda el orden,
+  los choques desempatan). `meta.ts` declara `scoring` con `direction: "lower"` y un
+  `format` propio que muestra "M:SS.CC - N choques". El mejor local se guarda
+  codificado en `BEST_KEY`.
+
+## Niveles (`levels.ts`)
+
+- Cada nivel es un **mapa de bitmap** (`LEVEL_N_MAP`: una fila = un string).
+  Caracteres: `#` pared (mortal), `.` corredor, `A` origen, `B` destino. `parseGrid`
+  lo limpia a `#`/`.` y extrae `start`/`end`.
+- `LEVEL_MAPS` es la lista ordenada de mapas; `LEVEL_COUNT` su cantidad;
+  `getLevel(index)` (1-based, acotado) devuelve el `Level`. **Para agregar un nivel:
+  pegar su `LEVEL_N_MAP` y sumarlo a `LEVEL_MAPS`** (nada mas).
+- Se juegan en orden 1..N; el timer y los choques **se acumulan** en toda la corrida.
+  Llegar a B en el ultimo nivel cierra la corrida (`reachEnd` -> `win`); en los
+  intermedios muestra el cartel "NIVEL N" (estado `clear`, `LEVEL_FLASH`, timer en
+  pausa) y carga el siguiente.
+- **Gotcha (deteccion de llegada):** la deteccion de B esta dentro de
+  `updateParticles`, que corre **todos los frames en cualquier estado**. Por eso el
+  chequeo `hypot(...) < CELL*0.7 -> reachEnd()` esta guardado con
+  `this.state === "playing"`: sin ese guard, tras ganar la senal queda sobre B y
+  `reachEnd()`/`win()` se disparaban cada frame, inundando el ranking con
+  `fetch`/`insert` (`ERR_INSUFFICIENT_RESOURCES` + panel trabado en "Cargando..."
+  porque se re-renderiza cada 16 ms). `win()` ademas tiene un guard anti-reentrada
+  (`if (this.state === "won") return`). `startDir` se recalcula por nivel (`computeStartDir`:
+  primer vecino de A que sea corredor). Conviene verificar A->B (el editor lo hace por
+  BFS en vivo con el radio real de la senal).
+
+## Editor visual (`MazeEditor.ts`, solo dev)
+
+- Abrir el juego con **`?edit=1`** (`main.ts` lo carga con import dinamico guardado por
+  `import.meta.env.DEV`, asi no entra en el build de produccion).
+- Se pinta el laberinto en una grilla: herramientas Corredor / Pared / Inicio A /
+  Destino B, tamano de pincel, tamano de grilla (cols/filas), selector de **Nivel**,
+  vaciar/rellenar y "Cargar nivel" (carga `getLevel(n)` para retocar). Muestra en vivo
+  si **A->B** es resoluble (BFS).
+- **"Copiar mapa"** exporta el bitmap como `const LEVEL_N_MAP = [...]` (segun el numero
+  de Nivel; al portapapeles y a un textarea) listo para pegar en `levels.ts`.
+
+## Render (`Game.ts`)
+
+- Placa toda de cobre (`COLOR_COPPER`, pared) con los corredores cavados encima
+  (`COLOR_CHANNEL`, oscuro) y su contorno luminoso (`COLOR_EDGE`, la "pared" a
+  evitar). Serigrafia de componentes sobre bloques 3x3 de cobre (`buildDeco`,
+  sembrada). Pad de origen A (circulo). Destino B = un **puerto USB-A** de **3x1 celdas**
+  (`drawUsbConnector`: panel, cavidad, lengueta y 4 contactos dorados; resplandor
+  pulsante; helper `roundRectPath`). Vista frontal montada **contra la pared**: el lado
+  largo (3) corre a lo largo de la pared y solo entra 1 celda al corredor, con la boca
+  hacia el corredor. Rota segun `endFacing`/`computeEndFacing` (la pared vecina de B; la
+  boca mira al corredor por donde llega el cable): horizontal en paredes arriba/abajo,
+  vertical en laterales. La senal es solo la **punta de un cable permanente**
+  fino azul (`path`, grosor ~1/3 del original, `COLOR_CABLE`/`COLOR_CABLE_GLOW`) que
+  dibuja todo el recorrido de la corrida (se reinicia al empezar y tras cada choque; al
+  ganar queda conectando A con B); **no hay circulo/cabeza** en el extremo. La punta
+  **desprende chispas electricas azules** (zigzag tipo rayo con parpadeo, disparadas
+  hacia los costados: `particles`, `spawnParticles`/`updateParticles`/`drawParticles`).
+  Letterbox por nivel (`resize`).
+
+## Ajustes (tuning)
+
+- Dificultad: `SPEED` (mas rapido = mas dificil), `SIGNAL_RADIUS` (mas grande = menos
+  holgura en las curvas), ancho de corredor (las `w/h` de los rects en `levels.ts`).
+- `CRASH_FREEZE`: cuanto dura el castigo del choque antes de volver al inicio.
+
+## Rankings / salas
+
+- Scoring "lower" (tiempo+choques, `encodeTimeMoves`) declarado en `meta.ts`, con
+  **variants**: `general` (los niveles juntos) + `nivel-N` por cada nivel (la lista se
+  arma con `LEVEL_COUNT`, por eso `meta.ts` importa `./game/levels`). Todos comparten
+  direccion/formato.
+- Cada nivel mide su propio tiempo/choques (`levelStartElapsed`/`levelStartCrashes`
+  marcados en `loadLevel`; `reachEnd` guarda `levelScores[nivel-1] =
+  encodeTimeMoves(tiempoNivel, choquesNivel)`). El general es el total acumulado.
+- **La marca de cada nivel se envia al pasarlo** (no al final): `reachEnd` llama
+  `submitScoreIfTop("circuit-breaker", lvlScore, { variant: nivel-N })`, que envia solo
+  si entra al Top 10 (y hay nickname). Asi queda registrada aunque la corrida no termine.
+- En `win` (sin sala) arma `scores = { general, nivel-1, ... }` y llama
+  `hud.showRankings(gameId, scores, ["general"])`: un **selector de pestanas** (general
+  por defecto) sobre el `LeaderboardPanel`. Solo las variantes en `submittable` (el
+  general, que recien se conoce al final) se envian desde el game-over; las pestanas de
+  nivel son de **solo lectura** (ya se enviaron al pasarlas). `rankSubmitted` evita
+  reenviar al alternar. Con sala: `reportScore(encoded)` del total, sin rankings.
+- La landing arma su propio selector de variantes desde `scoring.variants`/`variantLabel`
+  (el campeon de la tarjeta usa `variants[0]` = `general`).

@@ -48,6 +48,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Timber! | Reflejos | Talá el árbol lo más rápido posible cambiando de lado para esquivar las ramas antes de que se te acabe el tiempo. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Puerco Araña | Arcade | Lanzá la telaraña, columpiate entre los edificios con impulso de péndulo y soltate a toda velocidad para llegar lo más lejos que puedas. | [juanr8234](https://github.com/juanr8234) |
 | Trench Rush | Arcade | Metete en la trinchera espacial con tu caza y aguantá el asalto: derribá drones, esquivá rayos de energía que cruzan la trinchera y juntá baterías de escudo mientras la cosa se pone cada vez más rápida. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
+| Circuit Breaker | Precisión | Llevá la señal por el circuito desde el pad de origen hasta el conector destino sin rozar las paredes: si chocás, volvés al inicio. Tu marca es el tiempo que tardás y las veces que chocaste. Inspirado en el Circuit Breaker de GTA Online. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 
 ## Empezar
 
