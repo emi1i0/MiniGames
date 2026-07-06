@@ -42,7 +42,15 @@ paredes**. Si tocas una pared = choque: la senal vuelve al inicio y se cuenta.
 - Se juegan en orden 1..N; el timer y los choques **se acumulan** en toda la corrida.
   Llegar a B en el ultimo nivel cierra la corrida (`reachEnd` -> `win`); en los
   intermedios muestra el cartel "NIVEL N" (estado `clear`, `LEVEL_FLASH`, timer en
-  pausa) y carga el siguiente. `startDir` se recalcula por nivel (`computeStartDir`:
+  pausa) y carga el siguiente.
+- **Gotcha (deteccion de llegada):** la deteccion de B esta dentro de
+  `updateParticles`, que corre **todos los frames en cualquier estado**. Por eso el
+  chequeo `hypot(...) < CELL*0.7 -> reachEnd()` esta guardado con
+  `this.state === "playing"`: sin ese guard, tras ganar la senal queda sobre B y
+  `reachEnd()`/`win()` se disparaban cada frame, inundando el ranking con
+  `fetch`/`insert` (`ERR_INSUFFICIENT_RESOURCES` + panel trabado en "Cargando..."
+  porque se re-renderiza cada 16 ms). `win()` ademas tiene un guard anti-reentrada
+  (`if (this.state === "won") return`). `startDir` se recalcula por nivel (`computeStartDir`:
   primer vecino de A que sea corredor). Conviene verificar A->B (el editor lo hace por
   BFS en vivo con el radio real de la senal).
 
@@ -62,7 +70,13 @@ paredes**. Si tocas una pared = choque: la senal vuelve al inicio y se cuenta.
 - Placa toda de cobre (`COLOR_COPPER`, pared) con los corredores cavados encima
   (`COLOR_CHANNEL`, oscuro) y su contorno luminoso (`COLOR_EDGE`, la "pared" a
   evitar). Serigrafia de componentes sobre bloques 3x3 de cobre (`buildDeco`,
-  sembrada). Pads A/B (B pulsante). La senal es solo la **punta de un cable permanente**
+  sembrada). Pad de origen A (circulo). Destino B = un **puerto USB-A** de **3x1 celdas**
+  (`drawUsbConnector`: panel, cavidad, lengueta y 4 contactos dorados; resplandor
+  pulsante; helper `roundRectPath`). Vista frontal montada **contra la pared**: el lado
+  largo (3) corre a lo largo de la pared y solo entra 1 celda al corredor, con la boca
+  hacia el corredor. Rota segun `endFacing`/`computeEndFacing` (la pared vecina de B; la
+  boca mira al corredor por donde llega el cable): horizontal en paredes arriba/abajo,
+  vertical en laterales. La senal es solo la **punta de un cable permanente**
   fino azul (`path`, grosor ~1/3 del original, `COLOR_CABLE`/`COLOR_CABLE_GLOW`) que
   dibuja todo el recorrido de la corrida (se reinicia al empezar y tras cada choque; al
   ganar queda conectando A con B); **no hay circulo/cabeza** en el extremo. La punta
@@ -78,7 +92,17 @@ paredes**. Si tocas una pared = choque: la senal vuelve al inicio y se cuenta.
 
 ## Rankings / salas
 
-- Scoring "lower" (tiempo+choques) declarado en `meta.ts`.
-- Room mode cableado en el constructor (`initRoomMode("circuit-breaker", ...)`,
-  `getScore` = `encodeTimeMoves(elapsed, crashes)`, `onStart` -> `beginCountdown`);
-  en `win` usa `reportScore` si hay sala, si no `hud.showRanking`.
+- Scoring "lower" (tiempo+choques, `encodeTimeMoves`) declarado en `meta.ts`, con
+  **variants**: `general` (los niveles juntos) + `nivel-N` por cada nivel (la lista se
+  arma con `LEVEL_COUNT`, por eso `meta.ts` importa `./game/levels`). Todos comparten
+  direccion/formato.
+- Cada nivel mide su propio tiempo/choques (`levelStartElapsed`/`levelStartCrashes`
+  marcados en `loadLevel`; `reachEnd` guarda `levelScores[nivel-1] =
+  encodeTimeMoves(tiempoNivel, choquesNivel)`). El general es el total acumulado.
+- En `win` (sin sala) arma `scores = { general, nivel-1, nivel-2, ... }` y llama
+  `hud.showRankings`, que muestra un **selector de pestanas** (general por defecto) sobre
+  el `LeaderboardPanel`. Cada board se envia una sola vez por pantalla de fin (la primera
+  vez que se abre su pestana; `rankSubmitted` evita duplicados al alternar). Con sala:
+  `reportScore(encoded)` del total y no se muestran rankings.
+- La landing arma su propio selector de variantes desde `scoring.variants`/`variantLabel`
+  (el campeon de la tarjeta usa `variants[0]` = `general`).

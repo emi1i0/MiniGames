@@ -103,7 +103,7 @@ a {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: min(340px, 100%);
+  min-width: min(220px, 100%);
   padding: 12px 18px;
   background: var(--ink);
   color: #efeee6;
@@ -121,6 +121,38 @@ a {
 }
 
 .hero__search input::placeholder {
+  color: rgba(239, 238, 230, 0.6);
+}
+
+.hero__tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hero__name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: min(150px, 100%);
+  padding: 12px 18px;
+  background: var(--ink);
+  color: #efeee6;
+  border-radius: 999px;
+}
+
+.hero__name input {
+  flex: 1;
+  min-width: 0;
+  background: none;
+  border: none;
+  outline: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.hero__name input::placeholder {
   color: rgba(239, 238, 230, 0.6);
 }
 

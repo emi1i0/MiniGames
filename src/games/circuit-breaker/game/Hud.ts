@@ -13,7 +13,10 @@ export class Hud {
   private readonly hintEl: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
   private readonly bannerEl: HTMLDivElement;
+  private readonly rankTabsEl: HTMLDivElement;
   private readonly leaderboard = new LeaderboardPanel();
+  // Variantes ya enviadas en esta pantalla de fin (para no reenviar al re-ver una pestana).
+  private readonly rankSubmitted = new Set<string>();
 
   constructor(container: HTMLElement) {
     const hud = document.createElement("div");
@@ -51,7 +54,12 @@ export class Hud {
     this.hintEl = document.createElement("div");
     this.hintEl.className = "overlay__hint";
 
+    this.rankTabsEl = document.createElement("div");
+    this.rankTabsEl.className = "rank-tabs";
+    this.rankTabsEl.style.display = "none";
+
     this.overlayEl.append(this.titleEl, this.subtitleEl, this.scoreLineEl, this.bestLineEl, this.hintEl);
+    this.overlayEl.append(this.rankTabsEl);
     this.leaderboard.mount(this.overlayEl);
     this.leaderboard.clear();
 
@@ -113,6 +121,7 @@ export class Hud {
     this.bestLineEl.textContent = "";
     this.bestLineEl.style.display = "none";
     this.hintEl.textContent = "ENTER o toca para empezar - avanza sola, gira con flechas / WASD";
+    this.rankTabsEl.style.display = "none";
     this.leaderboard.clear();
     this.overlayEl.classList.remove("hidden");
   }
@@ -128,8 +137,45 @@ export class Hud {
     this.overlayEl.classList.remove("hidden");
   }
 
-  showRanking(gameId: string, score: number): void {
-    void this.leaderboard.render(gameId, { score });
+  /**
+   * Muestra el ranking con un selector de pestanas: "general" (los niveles juntos)
+   * y una por cada nivel. Cada board se envia una sola vez por pantalla de fin (la
+   * primera vez que se ve su pestana), asi ver una pestana registra ese puntaje sin
+   * duplicar al alternar. La pestana "general" va primera y se muestra por defecto.
+   */
+  showRankings(gameId: string, scores: Record<string, number>): void {
+    this.rankSubmitted.clear();
+    this.rankTabsEl.innerHTML = "";
+    const variants = Object.keys(scores);
+    for (const variant of variants) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "rank-tab";
+      tab.textContent = this.rankTabLabel(variant);
+      tab.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.selectRankTab(gameId, scores, variant);
+      });
+      this.rankTabsEl.append(tab);
+    }
+    this.rankTabsEl.style.display = variants.length > 1 ? "flex" : "none";
+    this.selectRankTab(gameId, scores, variants[0]);
+  }
+
+  private selectRankTab(gameId: string, scores: Record<string, number>, variant: string): void {
+    const tabs = Array.from(this.rankTabsEl.children) as HTMLButtonElement[];
+    const variants = Object.keys(scores);
+    tabs.forEach((t, i) => t.classList.toggle("is-active", variants[i] === variant));
+    // Enviar el puntaje solo la primera vez que se abre cada pestana.
+    const score = this.rankSubmitted.has(variant) ? undefined : scores[variant];
+    this.rankSubmitted.add(variant);
+    void this.leaderboard.render(gameId, { variant, score });
+  }
+
+  private rankTabLabel(variant: string): string {
+    if (variant === "general") return "General";
+    const n = variant.split("-")[1];
+    return n ? `Nivel ${n}` : variant;
   }
 
   hide(): void {

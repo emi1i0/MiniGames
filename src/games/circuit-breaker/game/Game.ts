@@ -61,6 +61,9 @@ export class Game {
   private viewH = 0;
   private startCenter = { x: 0, y: 0 };
   private endCenter = { x: 0, y: 0 };
+  // Hacia donde "apunta" el cuerpo del USB (el borde al que se pega); la abertura
+  // mira al lado opuesto (hacia adentro del tablero).
+  private endFacing = { x: 1, y: 0 };
   private deco: Deco[] = [];
   // Direccion inicial segura del nivel (calculada desde el corredor que sale de A).
   private startDir = { x: 1, y: 0 };
@@ -68,6 +71,11 @@ export class Game {
   // Corrida (acumula a lo largo de todos los niveles).
   private elapsed = 0;
   private crashes = 0;
+  // Para el ranking por nivel: tiempo/choques acumulados al empezar el nivel actual,
+  // y el puntaje codificado de cada nivel ya completado (index = nivel - 1).
+  private levelStartElapsed = 0;
+  private levelStartCrashes = 0;
+  private levelScores: number[] = [];
 
   // Senal (posicion continua en px de mundo). Avanza sola en `dir`; el jugador
   // solo cambia la direccion (4 direcciones).
@@ -132,6 +140,10 @@ export class Game {
     this.startCenter = { x: (this.level.start.x + 0.5) * CELL, y: (this.level.start.y + 0.5) * CELL };
     this.endCenter = { x: (this.level.end.x + 0.5) * CELL, y: (this.level.end.y + 0.5) * CELL };
     this.startDir = this.computeStartDir();
+    this.endFacing = this.computeEndFacing();
+    // Marca de inicio del nivel para medir su tiempo/choques propios.
+    this.levelStartElapsed = this.elapsed;
+    this.levelStartCrashes = this.crashes;
     this.deco = this.buildDeco();
     this.pos = { ...this.startCenter };
     this.dir = { ...this.startDir };
@@ -153,6 +165,34 @@ export class Game {
     ];
     for (const d of dirs) if (!this.isWall(s.x + d.x, s.y + d.y)) return d;
     return { x: 1, y: 0 };
+  }
+
+  /** Orientacion del USB: el cuerpo se pega a la pared y la abertura mira al
+   *  corredor por donde llega el cable. Devuelve la direccion del cuerpo. */
+  private computeEndFacing(): { x: number; y: number } {
+    const e = this.level.end;
+    const dirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ];
+    // Ideal: de un lado hay pared (cuerpo) y del opuesto corredor (abertura/cable).
+    for (const d of dirs) {
+      if (this.isWall(e.x + d.x, e.y + d.y) && !this.isWall(e.x - d.x, e.y - d.y)) return d;
+    }
+    // Si no, hacia cualquier pared vecina.
+    for (const d of dirs) if (this.isWall(e.x + d.x, e.y + d.y)) return d;
+    // Fallback: borde mas cercano del tablero.
+    const dLeft = e.x;
+    const dRight = this.level.cols - 1 - e.x;
+    const dTop = e.y;
+    const dBottom = this.level.rows - 1 - e.y;
+    const min = Math.min(dLeft, dRight, dTop, dBottom);
+    if (min === dRight) return { x: 1, y: 0 };
+    if (min === dLeft) return { x: -1, y: 0 };
+    if (min === dBottom) return { x: 0, y: 1 };
+    return { x: 0, y: -1 };
   }
 
   private bindInputs(): void {
@@ -238,6 +278,7 @@ export class Game {
   private resetRun(): void {
     this.elapsed = 0;
     this.crashes = 0;
+    this.levelScores = [];
     this.loadLevel(1); // ubica la senal en el origen del nivel 1
     this.hud.setTimer(0);
     this.hud.setCrashes(0);
@@ -363,12 +404,23 @@ export class Game {
     }
     if (this.particles.length) this.particles = this.particles.filter((p) => p.life > 0);
 
-    if (Math.hypot(this.endCenter.x - this.pos.x, this.endCenter.y - this.pos.y) < CELL * 0.7) {
+    // La deteccion de llegada solo corre mientras se juega. Si no, tras ganar la
+    // senal queda sobre el destino y reachEnd()/win() se dispararian cada frame
+    // (inundando el ranking con fetch/insert -> ERR_INSUFFICIENT_RESOURCES).
+    if (
+      this.state === "playing" &&
+      Math.hypot(this.endCenter.x - this.pos.x, this.endCenter.y - this.pos.y) < CELL * 0.7
+    ) {
       this.reachEnd();
     }
   }
 
   private reachEnd(): void {
+    // Registra el puntaje propio del nivel recien completado (tiempo + choques).
+    const lvlTime = this.elapsed - this.levelStartElapsed;
+    const lvlCrashes = this.crashes - this.levelStartCrashes;
+    this.levelScores[this.levelIndex - 1] = encodeTimeMoves(lvlTime, lvlCrashes);
+
     if (this.levelIndex < LEVEL_COUNT) {
       // Pasa al siguiente nivel: cartel + pausa; el tiempo/choques se mantienen.
       SoundEffects.playWin();
@@ -416,6 +468,7 @@ export class Game {
   }
 
   private win(): void {
+    if (this.state === "won") return; // una sola vez por corrida
     this.state = "won";
     this.wonFor = 0;
     SoundEffects.playWin();
@@ -429,8 +482,17 @@ export class Game {
     }
     this.hud.showWin(this.elapsed, this.crashes, this.formatScore(this.best), isNewBest);
 
-    if (this.room) this.room.reportScore(encoded);
-    else this.hud.showRanking("circuit-breaker", encoded);
+    if (this.room) {
+      this.room.reportScore(encoded);
+      return;
+    }
+
+    // Ranking con selector: uno general (los 3 niveles juntos) y uno por nivel.
+    const scores: Record<string, number> = { general: encoded };
+    this.levelScores.forEach((s, i) => {
+      scores[`nivel-${i + 1}`] = s;
+    });
+    this.hud.showRankings("circuit-breaker", scores);
   }
 
   // --- Render ---
@@ -567,22 +629,72 @@ export class Game {
     ctx.fill();
     ctx.restore();
 
-    // Conector destino (B), pulsante.
+    // Conector destino (B): un USB-A de ~3 celdas, con la abertura hacia la
+    // izquierda (por donde llega la senal). Pulsa el resplandor.
+    this.drawUsbConnector();
+  }
+
+  /** Dibuja el puerto USB-A (destino B), 3x1 celdas, montado contra la pared con la
+   *  boca hacia el corredor. Base local: x = a lo largo de la pared (3U), +y = hacia
+   *  el corredor (abertura), -y = contra la pared. Se rota con endFacing. */
+  private drawUsbConnector(): void {
+    const { ctx } = this;
     const p = 0.5 + 0.5 * Math.sin(this.pulse * 5);
+    const U = CELL;
+    const dark = "#062018";
+    const gold = "#ffd27a";
+
     ctx.save();
     ctx.translate(this.endCenter.x, this.endCenter.y);
-    ctx.fillStyle = COLOR_DEST;
+    // Alinea el eje largo (x) a lo largo de la pared: rota para que -y (fondo) mire
+    // hacia endFacing (la pared) y +y (la boca) hacia el corredor.
+    ctx.rotate(Math.atan2(this.endFacing.x, -this.endFacing.y));
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    // Panel/carcasa del puerto (3U de largo x 1U de fondo), pegado a la pared.
     ctx.shadowColor = COLOR_DEST;
-    ctx.shadowBlur = 8 + p * 24;
-    ctx.beginPath();
-    ctx.arc(0, 0, CELL * (0.28 + p * 0.08), 0, Math.PI * 2);
+    ctx.shadowBlur = 8 + p * 16;
+    ctx.strokeStyle = COLOR_DEST;
+    ctx.lineWidth = 3;
+    ctx.fillStyle = "rgba(125, 252, 255, 0.14)";
+    this.roundRectPath(-1.45 * U, -0.5 * U, 2.9 * U, 1.0 * U, 5);
     ctx.fill();
-    ctx.strokeStyle = "rgba(125, 252, 255, 0.5)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(0, 0, CELL * 0.5, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Cavidad (la boca del puerto, mira al corredor).
+    ctx.fillStyle = dark;
+    this.roundRectPath(-1.28 * U, -0.36 * U, 2.56 * U, 0.74 * U, 3);
+    ctx.fill();
+
+    // Lengueta pegada al fondo (lado pared), deja la ranura hacia el corredor.
+    ctx.fillStyle = "rgba(125, 252, 255, 0.85)";
+    this.roundRectPath(-1.16 * U, -0.34 * U, 2.32 * U, 0.4 * U, 2);
+    ctx.fill();
+
+    // 4 contactos dorados en fila a lo largo de la pared.
+    ctx.fillStyle = gold;
+    const cw = 0.34 * U;
+    const ch = 0.26 * U;
+    for (const xc of [-0.99, -0.33, 0.33, 0.99]) {
+      this.roundRectPath(xc * U - cw / 2, -0.3 * U, cw, ch, 1);
+      ctx.fill();
+    }
     ctx.restore();
+  }
+
+  /** Traza (sin pintar) un rectangulo redondeado en el contexto actual. */
+  private roundRectPath(x: number, y: number, w: number, h: number, r: number): void {
+    const { ctx } = this;
+    const rr = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rr, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rr);
+    ctx.arcTo(x + w, y + h, x, y + h, rr);
+    ctx.arcTo(x, y + h, x, y, rr);
+    ctx.arcTo(x, y, x + w, y, rr);
+    ctx.closePath();
   }
 
   private drawSignal(): void {

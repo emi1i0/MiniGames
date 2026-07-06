@@ -185,3 +185,35 @@ body {
   80% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(1.3); }
 }
+
+/* Selector de ranking (general + por nivel) en la pantalla de fin. */
+.rank-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 6px 0 12px;
+}
+
+.rank-tab {
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(57, 227, 154, 0.5);
+  background: rgba(57, 227, 154, 0.08);
+  color: #cfe;
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.rank-tab:hover {
+  background: rgba(57, 227, 154, 0.18);
+}
+
+.rank-tab.is-active {
+  background: #33e39a;
+  color: #04120c;
+  border-color: #33e39a;
+  font-weight: 700;
+}

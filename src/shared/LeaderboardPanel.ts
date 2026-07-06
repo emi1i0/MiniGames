@@ -165,16 +165,22 @@ export class LeaderboardPanel {
 
     const rows = await fetchTop(gameId, { variant: opts.variant });
 
-    // Partida terminada: pedir/confirmar el nombre solo si el puntaje entra al
-    // Top 10. El nombre usado la vez anterior aparece prellenado como
-    // sugerencia editable.
+    // Partida terminada y el puntaje entra al Top 10: si ya hay un nombre
+    // guardado, se envia automaticamente sin preguntar. Solo la primera vez
+    // (sin nombre guardado todavia) se pide el nombre con el formulario.
     const hasScore = opts.score !== undefined && Number.isFinite(opts.score);
     if (hasScore && qualifiesForTop(gameId, opts.score!, opts.variant, rows)) {
-      this.pending = { gameId, score: opts.score!, variant: opts.variant };
-      this.formEl.style.display = "flex";
-      this.inputEl.value = getNickname() ?? "";
-      this.inputEl.focus();
-      this.inputEl.select();
+      const saved = getNickname();
+      if (saved) {
+        void submitScore(gameId, opts.score!, { variant: opts.variant }).then(() =>
+          this.renderList(gameId, opts.variant, opts.score),
+        );
+      } else {
+        this.pending = { gameId, score: opts.score!, variant: opts.variant };
+        this.formEl.style.display = "flex";
+        this.inputEl.value = "";
+        this.inputEl.focus();
+      }
     }
 
     this.renderRows(gameId, rows, opts.variant, hasScore ? opts.score : undefined);
