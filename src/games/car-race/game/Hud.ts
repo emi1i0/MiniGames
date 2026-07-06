@@ -17,8 +17,10 @@ export class Hud {
   private overlayStat1El!: HTMLElement;
   private overlayStat2El!: HTMLElement;
   private overlayButtonEl!: HTMLButtonElement;
+  private statsEl!: HTMLElement;
   private mapsEl!: HTMLElement;
   private mapChips: HTMLElement[] = [];
+  private voteCountEls: HTMLElement[] = [];
   private readonly leaderboard = new LeaderboardPanel();
 
   constructor(container: HTMLElement, onAction: () => void) {
@@ -82,6 +84,7 @@ export class Hud {
     this.overlayStat2El = this.overlayEl.querySelector("#overlay-stat-2")!;
     this.overlayButtonEl = this.overlayEl.querySelector("#overlay-button")!;
     this.overlayButtonEl.addEventListener("click", onAction);
+    this.statsEl = this.overlayEl.querySelector(".overlay__stats")!;
     this.mapsEl = this.overlayEl.querySelector("#overlay-maps")!;
 
     this.leaderboard.mount(this.overlayEl.querySelector(".overlay__card")!);
@@ -153,6 +156,62 @@ export class Hud {
     this.mapChips.forEach((chip, i) => chip.classList.toggle("selected", i === idx));
   }
 
+  /**
+   * Pantalla de votacion de circuito en sala: chips clickeables con contador de
+   * votos. El overlay tapa la pista de fondo hasta que se decide el ganador.
+   */
+  showMapVote(
+    tracks: { name: string; accent: string; d: string }[],
+    onVote: (idx: number) => void,
+  ): void {
+    this.overlayTitleEl.textContent = "VOTÁ EL CIRCUITO";
+    this.overlaySubtitleEl.textContent = "";
+    this.overlayButtonEl.style.display = "none";
+    this.statsEl.classList.add("hidden");
+    this.leaderboard.clear();
+
+    this.mapsEl.classList.remove("hidden");
+    this.mapsEl.innerHTML = `<span class="overlay__maps-label">El más votado gana (empate al azar)</span>`;
+    const row = document.createElement("div");
+    row.className = "overlay__maps-row";
+    this.voteCountEls = [];
+    this.mapChips = tracks.map((t, i) => {
+      const chip = document.createElement("button");
+      chip.className = "map-chip";
+      chip.style.setProperty("--chip-accent", t.accent);
+      chip.innerHTML = `
+        <svg class="map-chip__svg" viewBox="0 0 100 62" aria-hidden="true">
+          <path d="${t.d}" fill="none" stroke="${t.accent}" stroke-width="5"
+                stroke-linejoin="round" stroke-linecap="round" />
+        </svg>
+        <span class="map-chip__name">${t.name}</span>
+        <span class="map-chip__votes"></span>`;
+      const badge = chip.querySelector<HTMLElement>(".map-chip__votes")!;
+      badge.style.cssText =
+        "min-width:1.1rem;height:1.1rem;line-height:1.1rem;margin-top:2px;border-radius:999px;" +
+        "font-size:0.72rem;font-weight:800;color:#0a0b0e;background:var(--chip-accent);" +
+        "display:inline-block;text-align:center;visibility:hidden;";
+      chip.addEventListener("click", () => onVote(i));
+      row.append(chip);
+      this.voteCountEls.push(badge);
+      return chip;
+    });
+    this.mapsEl.append(row);
+    this.overlayEl.classList.remove("hidden");
+  }
+
+  /** Actualiza contadores de votos, el circuito propio elegido y el texto de estado. */
+  updateMapVote(counts: number[], myIdx: number, info: string): void {
+    counts.forEach((c, i) => {
+      const badge = this.voteCountEls[i];
+      if (!badge) return;
+      badge.textContent = String(c);
+      badge.style.visibility = c > 0 ? "visible" : "hidden";
+    });
+    this.setSelectedMap(myIdx);
+    this.overlaySubtitleEl.textContent = info;
+  }
+
   setLap(lap: number, total: number): void {
     this.lapEl.textContent = `${Math.min(lap, total)}/${total}`;
   }
@@ -193,6 +252,7 @@ export class Hud {
     this.overlayStat1El.textContent = "-";
     this.overlayButtonEl.textContent = "JUGAR";
     this.overlayButtonEl.style.display = "";
+    this.statsEl.classList.remove("hidden");
     this.mapsEl.classList.remove("hidden");
     this.leaderboard.clear();
     this.overlayEl.classList.remove("hidden");
@@ -213,6 +273,7 @@ export class Hud {
     this.overlayStat2El.textContent = bestText;
     this.overlayButtonEl.textContent = "OTRA CARRERA";
     this.overlayButtonEl.style.display = allowRetry ? "" : "none";
+    this.statsEl.classList.remove("hidden");
     this.overlayEl.classList.remove("hidden");
   }
 

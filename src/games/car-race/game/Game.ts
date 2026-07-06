@@ -28,13 +28,17 @@ import {
   buildObstacles,
   type Obstacles,
 } from "./obstacles";
-import { RaceChannel } from "./RaceChannel";
+import { RaceChannel, type MapPayload, type VotePayload } from "./RaceChannel";
 import { Renderer, type RemoteCar, type Skid } from "./Renderer";
 import { TRACK_DEFS, buildTrack, trackPreview, type Track } from "./tracks";
 
-type State = "loading" | "ready" | "countdown" | "racing" | "finished";
+type State = "loading" | "mapvote" | "ready" | "countdown" | "racing" | "finished";
 
 const COUNTDOWN_SEC = 3;
+/** Duracion de la votacion de circuito en sala. */
+const MAP_VOTE_MS = 12000;
+/** Gracia extra del no-host antes de caer al mapa por defecto si el host no anuncia. */
+const MAP_VOTE_FALLBACK_MS = 3500;
 
 export class Game {
   private readonly canvas: HTMLCanvasElement;
@@ -61,6 +65,19 @@ export class Game {
   private readonly remotes = new Map<string, RemoteCar>();
   private channel: RaceChannel | null = null;
   private sendAccMs = 0;
+
+  // ---- Votacion de circuito en sala ----
+  private roomIsHost = false;
+  private roomPlayerCount = 1;
+  private roomSeed = 0;
+  /** Circuito por defecto (por seed) si nadie vota o el host se cae. */
+  private voteFallbackIdx = 0;
+  /** Voto de cada jugador (nickname -> indice de circuito). */
+  private readonly mapVotes = new Map<string, number>();
+  private myVote: number | null = null;
+  private voteEndsAt = 0;
+  /** El circuito ya quedo decidido (evita re-decidir / re-aplicar). */
+  private mapDecided = false;
 
   private countdownLeft = 0;
   private startTime = 0;
@@ -124,12 +141,19 @@ export class Game {
     if (this.roomCode && getSupabase()) {
       const state = await fetchRoomState(this.roomCode);
       const round = state?.room.current_round ?? 0;
-      // Seed determinista de sala: mismo circuito y mismos obstaculos para todos.
+      // Seed determinista de sala: mismos obstaculos y mapa por defecto para todos.
       const seed = hashStr(`${this.roomCode}:${round}`);
       trackIdx = seed % TRACK_DEFS.length;
       obstacleSeed = seed;
 
+      this.roomIsHost = !!state && state.room.host === this.me;
+      this.roomPlayerCount = state?.players.length ?? 1;
+      this.roomSeed = seed;
+      this.voteFallbackIdx = trackIdx;
+
       this.channel = new RaceChannel(this.roomCode, round);
+      this.channel.onVote((v) => this.onVote(v));
+      this.channel.onMap((m) => this.onMap(m));
       this.channel.onPos((p) => {
         if (p.p === this.me) return;
         let car = this.remotes.get(p.p);
@@ -161,18 +185,94 @@ export class Game {
       });
     }
 
+    // El mapa por defecto (por seed) queda de fondo detras del overlay hasta
+    // que se resuelve la votacion.
     this.setupTrack(trackIdx, obstacleSeed);
 
     if (this.room) {
-      // En sala la carrera arranca sola: todos cargan casi a la vez y el
-      // countdown de 3s los deja practicamente sincronizados.
-      this.beginCountdown();
+      // En sala, antes de largar se vota el circuito entre todos.
+      this.startMapVote();
     } else {
       this.state = "ready";
       this.hud.showStart(this.track.def.name, this.track.def.laps, this.bestText());
       this.hud.setSelectedMap(this.selectedTrack);
       this.hud.showRankingReadonly("car-race", this.track.def.id);
     }
+  }
+
+  // ---------- Votacion de circuito (sala) ----------
+
+  private startMapVote(): void {
+    this.state = "mapvote";
+    this.mapVotes.clear();
+    this.myVote = null;
+    this.mapDecided = false;
+    this.voteEndsAt = performance.now() + MAP_VOTE_MS;
+    this.hud.showMapVote(
+      TRACK_DEFS.map((_, i) => trackPreview(i)),
+      (idx) => this.castVote(idx),
+    );
+    this.refreshVoteUi();
+  }
+
+  private castVote(idx: number): void {
+    if (this.state !== "mapvote" || this.mapDecided) return;
+    this.myVote = idx;
+    this.mapVotes.set(this.me, idx);
+    this.channel?.sendVote({ p: this.me, m: idx });
+    this.refreshVoteUi();
+  }
+
+  private onVote(v: VotePayload): void {
+    if (v.p === this.me || v.m < 0 || v.m >= TRACK_DEFS.length) return;
+    this.mapVotes.set(v.p, v.m);
+    if (this.state === "mapvote") this.refreshVoteUi();
+  }
+
+  private onMap(m: MapPayload): void {
+    if (this.mapDecided || this.state !== "mapvote") return;
+    if (m.m < 0 || m.m >= TRACK_DEFS.length) return;
+    this.applyChosenMap(m.m);
+  }
+
+  private refreshVoteUi(): void {
+    const counts = new Array<number>(TRACK_DEFS.length).fill(0);
+    for (const idx of this.mapVotes.values()) counts[idx]++;
+    const remaining = Math.max(0, Math.ceil((this.voteEndsAt - performance.now()) / 1000));
+    const info =
+      this.myVote === null
+        ? `Elegí un circuito · ${remaining}s`
+        : `Votaste ${TRACK_DEFS[this.myVote].name} · ${remaining}s`;
+    this.hud.updateMapVote(counts, this.myVote ?? -1, info);
+  }
+
+  /** Circuito ganador: mas votos; empate (incluye 0 votos) al azar por seed. */
+  private tallyWinner(): number {
+    const counts = new Array<number>(TRACK_DEFS.length).fill(0);
+    for (const idx of this.mapVotes.values()) counts[idx]++;
+    const max = Math.max(...counts);
+    if (max === 0) return this.voteFallbackIdx;
+    const tied: number[] = [];
+    counts.forEach((c, i) => {
+      if (c === max) tied.push(i);
+    });
+    return tied[this.roomSeed % tied.length];
+  }
+
+  /** Aplica el circuito elegido y larga la carrera (host y no-host). */
+  private applyChosenMap(idx: number): void {
+    if (this.mapDecided || this.state !== "mapvote") return;
+    this.mapDecided = true;
+    this.setupTrack(idx, this.roomSeed);
+    this.beginCountdown();
+  }
+
+  /** Solo el host: computa el ganador, lo anuncia y larga. */
+  private decideMap(): void {
+    if (this.mapDecided) return;
+    const winner = this.tallyWinner();
+    this.channel?.sendMap({ m: winner });
+    this.applyChosenMap(winner);
   }
 
   /** Arma circuito y obstaculos: indice de pista + seed del layout de hazards. */
@@ -331,6 +431,23 @@ export class Game {
 
   private update(dt: number): void {
     if (this.state === "loading") return;
+
+    if (this.state === "mapvote") {
+      this.refreshVoteUi();
+      if (!this.mapDecided) {
+        const now = performance.now();
+        const allVoted = this.mapVotes.size >= this.roomPlayerCount;
+        if (this.roomIsHost) {
+          if (allVoted || now >= this.voteEndsAt) this.decideMap();
+        } else if (now >= this.voteEndsAt + MAP_VOTE_FALLBACK_MS) {
+          // No llego el anuncio del host (se cayo o se perdio el broadcast):
+          // recomputo el mismo ganador determinista (mismos votos + desempate
+          // por seed), asi coincido con el resto sin depender del mensaje.
+          this.applyChosenMap(this.tallyWinner());
+        }
+      }
+      return;
+    }
 
     this.updateRemotes(dt);
 

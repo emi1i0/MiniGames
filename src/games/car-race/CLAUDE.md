@@ -60,10 +60,25 @@ tiempo local); modo sala = todos corren el mismo circuito con posiciones en vivo
   visual que daba el kick de velocidad).
 - **Selector de circuito** ([Hud.ts](game/Hud.ts) `buildMapSelector`): en modo
   solo el overlay muestra un chip por circuito con **miniatura SVG del trazado**;
-  `onSelectMap` reconstruye la pista y la previsualiza detras del menu. En sala
-  no aparece (el mapa es fijo por seed).
+  `onSelectMap` reconstruye la pista y la previsualiza detras del menu.
+- **Votacion de circuito en sala** ([Game.ts](game/Game.ts) `startMapVote`):
+  antes de largar, todos votan el circuito. Los votos viajan por
+  [RaceChannel](game/RaceChannel.ts) (eventos `vote`/`map`, broadcast efimero, sin
+  DB). El **anfitrion** (por `host` de la sala) cierra cuando votaron todos o al
+  vencer el tope (`MAP_VOTE_MS`), computa el ganador (`tallyWinner`: mas votos,
+  empate/0 votos al azar por `seed`) y lo anuncia con `sendMap`; el resto lo
+  aplica al recibir `map`. Fallback del no-host si no llega el anuncio: recomputa
+  el mismo `tallyWinner()` (determinista, mismos votos + seed), no un mapa
+  arbitrario. El `obstacleSeed` sigue saliendo de `hashStr(code:round)`, asi el
+  layout de hazards es igual para todos sobre el circuito votado. Gotcha: un
+  jugador que entra **tarde** (mitad de carrera / espectador) no tiene los votos
+  y cae al mapa por defecto por seed, que puede no ser el votado.
+- **Flechas de direccion** ([Renderer.ts](game/Renderer.ts) `drawDirectionArrows`):
+  chevrons sutiles repartidos por distancia sobre la centerline (`track.pointAt`),
+  apuntando en el sentido de avance (tangente de la spline), para que se lea hacia
+  donde correr. Se saltan cerca de la meta para no pisar la grilla de largada.
 - **Ranking por circuito**: cada pista tiene su propia tabla global. `car-race`
-  declara `variants` (los 6 `id` de pista) en [scoring.ts](../../shared/scoring.ts);
+  declara `variants` (los 6 `id` de pista) en [meta.ts](meta.ts);
   `finishRace` llama `hud.showRanking("car-race", ms, track.def.id)` y la landing
   ofrece el selector de variante automaticamente. En el overlay, el ranking
   **sigue al circuito elegido en el selector**: `onSelectMap` re-renderiza el
@@ -77,9 +92,11 @@ tiempo local); modo sala = todos corren el mismo circuito con posiciones en vivo
 
 ## Seed
 
-`setupTrack(seed)` deriva el indice de pista (`seed % TRACK_DEFS.length`) y el
-layout de obstaculos (`hashStr("obs:"+seed)`). Solo: seed aleatorio por carrera.
-Sala: `hashStr(code + ":" + round)`, determinista para todos.
+`setupTrack(idx, seed)` recibe el indice de pista y deriva el layout de
+obstaculos (`hashStr("obs:"+seed)`). Solo: idx elegido en el menu, seed aleatorio
+por carrera. Sala: el `seed` es `hashStr(code + ":" + round)` (determinista para
+todos, fija los hazards y el mapa por defecto), pero el **indice de pista sale de
+la votacion**, no del seed.
 
 ## Camara y render
 
@@ -99,4 +116,5 @@ marcas (`car.slip > 45`) esta en `recordSkids`.
 ## Countdown
 
 Cumple el patron obligatorio Enter-para-empezar 3/2/1/YA (estado `countdown` +
-`Hud.showCountdown`). En sala arranca solo tras cargar.
+`Hud.showCountdown`). En sala arranca solo tras cerrarse la votacion de circuito
+(estado `mapvote` -> `countdown`), sin que cada jugador tenga que tocar Enter.

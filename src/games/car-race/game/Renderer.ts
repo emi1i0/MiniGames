@@ -305,7 +305,41 @@ export class Renderer {
     ctx.stroke();
     ctx.setLineDash([]);
 
+    this.drawDirectionArrows(ctx, track);
     this.drawStartLine(ctx, track);
+  }
+
+  /**
+   * Flechas (chevrons) sobre el asfalto que indican el sentido de la carrera.
+   * Se reparten por distancia a lo largo de la centerline y apuntan en la
+   * direccion de avance (tangente de la spline). Sutiles para no tapar la pista.
+   */
+  private drawDirectionArrows(ctx: CanvasRenderingContext2D, track: Track): void {
+    const spacing = 175;
+    const count = Math.max(6, Math.round(track.total / spacing));
+    const size = Math.min(track.def.width * 0.3, 15);
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.34)";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (let i = 0; i < count; i++) {
+      const s = (i + 0.5) / count;
+      // Saltar la zona de la meta para no pisar la grilla de largada.
+      if (s < 0.03 || s > 0.97) continue;
+      const p = track.pointAt(s);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.5, -size * 0.72);
+      ctx.lineTo(size * 0.62, 0);
+      ctx.lineTo(-size * 0.5, size * 0.72);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   private drawStartLine(ctx: CanvasRenderingContext2D, track: Track): void {
