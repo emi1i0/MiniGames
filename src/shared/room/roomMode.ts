@@ -1,4 +1,4 @@
-import { games, roomGames } from "../../games";
+import { games, roomGames, coverUrl } from "../../games";
 import { formatScore } from "../scoring";
 import { getNickname } from "../nickname";
 import { getSupabase } from "../supabase";
@@ -684,7 +684,7 @@ class RoomModeController implements RoomMode {
       round: voteRound,
       options: optionIds.map((id) => {
         const game = games.find((g) => g.id === id);
-        return { id, title: game?.title ?? id, accent: game?.accent };
+        return { id, title: game?.title ?? id, accent: game?.accent, cover: coverUrl(id) };
       }),
       counts,
       myVote,

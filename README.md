@@ -52,6 +52,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Ring Runner | Precisión | Un punto gira por un anillo blanco con una zona negra; tocá justo cuando la cruza. Cada acierto achica la zona y acelera el punto, así que aguantá el ritmo lo más que puedas. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Final Sentence | Reflejos | Despertás con un revólver en la sien: escribí cada frase sin fallar porque cada error carga una bala en el tambor. Al terminar la frase se jala el gatillo, una ruleta rusa. Sobreviví y sumá frases. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Pulso de Acero | Precisión | Una mano sostiene una katana en un dojo a oscuras: mantené el filo en equilibrio (péndulo invertido) inclinando izquierda y derecha, y aguantá lo máximo posible antes de que se caiga. Tu marca es el tiempo que la mantenés parada. | [matiasgzlez](https://github.com/matiasgzlez) |
+| Memoria de Color | Precisión | Un color aparece unos segundos y desaparece: recreálo de memoria moviendo los deslizadores de matiz, saturación y brillo. Tres rondas y tu puntaje es el promedio de aciertos. Descubrí qué tan fiable es tu ojo. | [matiasgzlez](https://github.com/matiasgzlez) |
 
 ## Empezar
 

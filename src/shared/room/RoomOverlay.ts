@@ -73,6 +73,12 @@ const CSS = `
   color: #111; font: inherit; font-size: 15px; font-weight: 700; text-align: left;
   transition: border-color 0.15s ease, transform 0.14s ease, box-shadow 0.15s ease;
 }
+.mg-room__vote-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.mg-room__vote-thumb {
+  flex-shrink: 0; width: 46px; height: 46px; border-radius: 10px; overflow: hidden;
+  background: var(--accent); border: 2px solid rgba(17, 17, 17, 0.25);
+}
+.mg-room__vote-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mg-room__vote:hover { border-color: #111; transform: translateY(-2px); box-shadow: 0 6px 0 -3px #111; }
 .mg-room__vote--mine { border-color: #111; box-shadow: 0 0 0 2.5px #111; }
 .mg-room__vote-count { font-size: 12px; font-weight: 700; color: #6f6d5e; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -143,6 +149,8 @@ export interface VoteOption {
   id: string;
   title: string;
   accent?: string;
+  /** Portada del juego (opcional; la votacion de tiempo no la usa). */
+  cover?: string;
 }
 
 const STATE_LABELS: Record<WaitingEntry["state"], string> = {
@@ -523,13 +531,31 @@ export class RoomOverlay {
       btn.type = "button";
       if (opt.accent) btn.style.setProperty("--accent", opt.accent);
 
+      const main = document.createElement("span");
+      main.className = "mg-room__vote-main";
+
+      // Miniatura de la portada (solo la votacion de juego la trae). Si la imagen
+      // falla, queda el recuadro con el color del juego.
+      if (opt.cover) {
+        const thumb = document.createElement("span");
+        thumb.className = "mg-room__vote-thumb";
+        const img = document.createElement("img");
+        img.src = opt.cover;
+        img.alt = "";
+        img.loading = "lazy";
+        img.addEventListener("error", () => img.remove());
+        thumb.append(img);
+        main.append(thumb);
+      }
+
       const title = document.createElement("span");
       title.textContent = opt.title;
+      main.append(title);
 
       const count = document.createElement("span");
       count.className = "mg-room__vote-count";
 
-      btn.append(title, count);
+      btn.append(main, count);
       btn.addEventListener("click", () => {
         // Resaltado optimista: se marca al toque, sin esperar el round-trip a la
         // DB. El refresh posterior lo confirma (y corrige los contadores).
