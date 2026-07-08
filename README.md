@@ -56,6 +56,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Memoria de Color | Precisión | Un color aparece unos segundos y desaparece: recreálo de memoria moviendo los deslizadores de matiz, saturación y brillo. Tres rondas y tu puntaje es el promedio de aciertos. Descubrí qué tan fiable es tu ojo. | [matiasgzlez](https://github.com/matiasgzlez) |
 | Hole in None | Precisión | Tres hoyos de minigolf cartoon en 3D con molinetes, bumpers y atajos arriesgados. Arrastrá desde la pelota para apuntar, soltá para pegar y embocá en la menor cantidad de golpes. | [emi1i0](https://github.com/emi1i0) |
 | Bomba Palabra | Party | Bomba de palabras por turnos: aparece un fragmento (una sílaba o combo de letras) y tenés hasta que se agote la mecha para escribir una palabra real que lo contenga. Si explota perdés una vida; el último en pie gana. Solo se juega en salas con amigos. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
+| Cálculo Flash | Puzzle | Aparecen números de a uno que se van sumando y restando; memorizalos y al final escribí el resultado. En solitario las rondas suben de dificultad y un error termina la partida; en salas todos ven la misma cuenta y ganás puntos por acercarte al resultado. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 
 ## Empezar
 
