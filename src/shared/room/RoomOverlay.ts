@@ -219,6 +219,27 @@ export class RoomOverlay {
     for (const type of ["pointerdown", "mousedown", "click", "touchstart"]) {
       this.root.addEventListener(type, (e) => e.stopPropagation());
     }
+    // Los juegos escuchan Enter/Espacio en `window` para su propio "toca para
+    // empezar" (ver CLAUDE.md, "Enter-to-start countdown"). Ese listener no
+    // sabe nada del overlay: sin esto, tocar Enter mientras se lee el briefing
+    // (o cualquier otra vista del overlay) arranca la partida local antes de
+    // que la ronda pase a "playing", el juego termina solo y reporta un
+    // puntaje para una ronda que todavia no empezo para los demas. Se
+    // intercepta en fase de captura (antes que el listener del juego, que esta
+    // en fase de bubble) mientras el overlay esta visible, salvo que el foco
+    // este en un control propio del overlay (p.ej. el boton "Listo" via teclado).
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (this.root.style.display === "none") return;
+        if (e.target instanceof Node && this.root.contains(e.target)) return;
+        if (e.code === "Space" || e.code === "Enter") {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      },
+      { capture: true },
+    );
 
     this.boxEl = document.createElement("div");
     this.boxEl.className = "mg-room__box";
