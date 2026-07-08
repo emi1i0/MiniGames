@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro and Hole in None), each independently playable, plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel).
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra and Hole in None), each independently playable — except Bomba Palabra, which is **rooms-only** (needs a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
 
 ## Conventions (must follow)
 
@@ -17,7 +17,7 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 
 - `index.html`, `src/main.ts`, `src/style.css` — the landing page. Renders a card per game from the `games` array in `src/games.ts`, plus a "Jugar con amigos" link to `/rooms/` (only when Supabase credentials exist).
 - `src/games.ts` — the `GameEntry` type (`id`, `title`, `description`, `path`, optional `accent`, optional `controls`, `category`, optional `order`, optional `hidden`, optional `roomsHidden`) plus `coverUrl`. `controls` is a one-line "how to play" string shown in the room-mode briefing before each round (see "Salas"); omit it and the briefing just skips the controls block. `roomsHidden` drops a game from rooms only (kept on the landing) — the file also exports `roomGames` (= `games` minus `roomsHidden`) for the room selection/vote/random/picker paths. It does **not** list the games by hand: it auto-discovers them with `import.meta.glob("./games/*/meta.ts", { eager: true })`, filters out `hidden` ones, and sorts by `order` (ascending; entries without `order` fall to the end, then alphabetical by title). **This file is closed for modification** — adding a game means adding its `meta.ts`, never editing `games.ts` (this is what stops the registry from producing merge conflicts on every new game).
-- `src/games/<id>/meta.ts` — that game's registry entry: `export const meta: GameEntry = { ... }`. **Every game needs this file** (it is what the landing page, rooms, and random-game picker read). Set `order` to place the card (existing games use multiples of 10). Set `hidden: true` to pull a game from the roster without deleting it (e.g. `rocket-arena`, hidden due to errors) — its code stays in the repo and it just disappears from the landing and the rooms voting / random pool. Set `roomsHidden: true` to exclude a game from **rooms only** (host picker, vote pool, random and playlist) while keeping it on the landing (e.g. `pong`); `src/games.ts` derives `roomGames` (= `games` minus `roomsHidden`) for that, and the room code uses `roomGames` for selection but still looks games up by id in `games` so an in-flight round resolves its title/URL.
+- `src/games/<id>/meta.ts` — that game's registry entry: `export const meta: GameEntry = { ... }`. **Every game needs this file** (it is what the landing page, rooms, and random-game picker read). Set `order` to place the card (existing games use multiples of 10). Set `hidden: true` to pull a game from the roster without deleting it (e.g. `rocket-arena`, hidden due to errors) — its code stays in the repo and it just disappears from the landing and the rooms voting / random pool. Set `roomsHidden: true` to exclude a game from **rooms only** (host picker, vote pool, random and playlist) while keeping it on the landing (no game currently uses it — Pong used to, before it gained its server-authoritative room mode); `src/games.ts` derives `roomGames` (= `games` minus `roomsHidden`) for that, and the room code uses `roomGames` for selection but still looks games up by id in `games` so an in-flight round resolves its title/URL.
 - `games/<id>/index.html` — one Vite HTML entry point per game (root-level `games/`, not under `src/`), giving each game a clean URL `/games/<id>/`.
 - `src/games/<id>/` — that game's source (`main.ts`, `style.css`, plus its own submodules, e.g. `game/`).
 - `src/shared/` — cross-cutting leaderboard infra shared by every game and the landing page (see "Global rankings" below), plus `src/shared/room/` (multiplayer rooms, see "Salas" below). This is the **one** sanctioned shared module; it is not game-engine code.
@@ -90,6 +90,66 @@ Per-game wiring (the only game-side code, ~4 lines in each `Game.ts`, `Hud.ts` u
 Setup note: the rooms schema (including `room_match_state`) is `supabase/rooms.sql`; re-run it in the Supabase SQL Editor after pulling changes that touch it (statements are idempotent).
 
 Degradation matches the leaderboard: without credentials the landing button and `/rooms/` UI don't function and every game behaves exactly as before.
+
+## Game server (tiempo real / autoritativo)
+
+Servidor Node separado en `server/` (socket.io, deploy en Railway) para los
+juegos de sala que necesitan un **arbitro autoritativo** que Supabase no puede
+dar bien: tiempo real (PONG; rocket-arena a futuro) o validacion server-side no
+spoofeable. **Complementa** la infra de salas de Supabase, no la reemplaza:
+Supabase sigue siendo la fuente de verdad de lobby / marcador / rejoin; el server
+solo maneja el **estado en-ronda en memoria** y **no toca la DB**. Plan de fondo:
+`docs/server-realtime-plan.md`. **En uso: Bomba Palabra** (`word-bomb`, validacion
+por turnos) **y PONG** (`pong`, fisica de tiempo real / PvP 1v1).
+
+Estructura de `server/` (paquete propio, aislado del build de Vite, con su propio
+`package.json` / `tsconfig.json` / `node_modules`, gitignoreado):
+- `src/index.ts` — crea `io` + health check HTTP (`/health`, devuelve tamano del
+  diccionario) + registra los namespaces de cada juego. Escucha en `PORT`
+  (Railway lo inyecta), CORS a `ALLOWED_ORIGINS` (coma-separado; `*` en dev).
+- `src/rooms.ts` — infra generica reutilizable: `GameRoom` (un socket.io room por
+  `(namespace, code)`, mapeo nickname<->socket, broadcast) + `registerGame(io,
+  namespace, joinEvent, parseJoin, makeSim)` que crea/descarta rooms y reenvia
+  los eventos al `RoomSim` del juego (contrato `join` / `leave` / `message` /
+  `dispose`). Para agregar otro juego server-side se implementa un `RoomSim` y se
+  llama `registerGame` en su propio namespace.
+- `src/protocol.ts` — tipos de mensajes (por juego: `wb:*` de Bomba Palabra,
+  `pg:*` de PONG). **Se duplican en el cliente** (p.ej.
+  `src/games/word-bomb/game/WordBombTransport.ts` y
+  `src/games/pong/game/PongProtocol.ts`) por la regla de decoupling (no se
+  comparte modulo entre `src/` y `server/`); si cambia el protocolo, tocar ambos
+  lados.
+- `src/dictionary.ts` — diccionario de espanol embebido
+  (`an-array-of-spanish-words`, ~636k palabras) para Bomba Palabra: normaliza
+  (conserva la ñ, saca acentos) y precomputa los fragmentos jugables. Vive solo
+  en el server (validacion no spoofeable, sin peso en el bundle del front).
+- `src/games/wordbomb.ts` — `WordBombSim`: turnos, mecha (deadline absoluto),
+  vidas, palabras usadas, validacion y orden de eliminacion. Difunde `wb:state`
+  en cada cambio; el cliente anima la mecha localmente entre snapshots. Ver el
+  `CLAUDE.md` de `word-bomb` para el detalle del flujo y el tuning.
+- `src/games/pong.ts` — `PongSim`: empareja la sala de a dos (un `Match` por par;
+  el impar juega vs IA del server), corre la fisica de la pelota / colisiones /
+  rampa / puntaje a ~30 fps y emite `pg:state` a cada jugador con su lado. La
+  pelota queda congelada un `PREROLL_MS` (3s) para coincidir con el countdown del
+  cliente. Las constantes de fisica estan duplicadas de `constants.ts` del juego.
+  Ver el `CLAUDE.md` de `pong` para el detalle.
+
+Cliente: env `VITE_GAME_SERVER_URL` (documentada en `.env.example`). El juego
+carga `socket.io-client` con **import dinamico** (no pesa en los juegos que no lo
+usan). **Degradacion:** depende del juego. PONG degrada con gracia: sin
+`VITE_GAME_SERVER_URL` la sala cae a un partido local vs IA por jugador (y solo
+sigue siendo 1 jugador en la landing). Bomba Palabra **no** puede: existe por el
+server, asi que sin `VITE_GAME_SERVER_URL` muestra "no disponible" (excepcion
+deliberada y documentada a la regla de degradacion del repo).
+
+Comandos del server (dentro de `server/`): `npm run dev` (tsx watch),
+`npm run build` (tsc -> `dist/`), `npm start` (`node dist/index.js`). Deploy
+Railway: root del servicio = `server/`, build `npm ci && npm run build`, start
+`node dist/index.js`, setear `ALLOWED_ORIGINS` con el origin de Vercel.
+
+Seguridad / trust: mismo nivel spoofeable ya aceptado en el repo (el cliente
+declara su `code`/`nickname`); el server no escribe en Supabase y los puntajes se
+siguen reportando por cada cliente a la DB como en el resto de las salas.
 
 ## Anuncios (Google AdSense)
 

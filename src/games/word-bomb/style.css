@@ -1,0 +1,381 @@
+/* Bomba Palabra — "Mesa de bomba" (ver DESIGN.md): mesa oscura y calida, los
+   jugadores en circulo alrededor de la bomba, avatar generico, y bajo cada uno lo
+   que escribe. Sin caja de texto (un input invisible captura el tecleo). */
+
+:root {
+  --table: #3a3330;
+  --table-hi: #4a423d;
+  --name: #f5f2ee;
+  --muted: #b7ada4;
+  --plate: #8a8a8a;
+  --silhouette: #6a5f86;
+  --turn: #46d16a;
+  --spark: #f5c518;
+  --heart: #ff5a5f;
+  --danger: #e23b3b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at 50% 45%, var(--table-hi) 0%, var(--table) 62%, #2c2724 100%);
+  color: var(--name);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+#app {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.back-link {
+  position: fixed;
+  top: 12px;
+  left: 14px;
+  z-index: 60;
+  color: var(--name);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.back-link:hover {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.wb {
+  height: 100%;
+  position: relative;
+}
+
+/* ---------- Escena en-juego ---------- */
+
+.wb__stage {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.wb__stage[hidden] {
+  display: none;
+}
+
+.wb__arena {
+  position: relative;
+  width: min(92vmin, 720px);
+  height: min(92vmin, 720px);
+}
+
+/* Input invisible: captura el tecleo y summonea el teclado en movil, sin caja
+   visible. El texto se refleja bajo el avatar propio (JS). */
+.wb__input {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: transparent;
+  font-size: 16px; /* evita el zoom de iOS al enfocar */
+  outline: none;
+  cursor: default;
+  text-align: center;
+}
+.wb__input:disabled {
+  pointer-events: none;
+}
+
+/* ---------- Bomba central ---------- */
+
+.wb__bomb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: clamp(96px, 22vmin, 150px);
+  height: clamp(96px, 22vmin, 150px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #4a4a4a 0%, #1c1a19 70%);
+  border: 3px solid #0d0c0b;
+  box-shadow:
+    inset 0 4px 10px rgba(255, 255, 255, 0.12),
+    0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+}
+
+.wb__bomb-frag {
+  font-size: clamp(1.4rem, 5vmin, 2.4rem);
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--name);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* Flecha/chispa que apunta al jugador de turno (gira segun el angulo). */
+.wb__pointer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  border-left: 13px solid transparent;
+  border-right: 13px solid transparent;
+  border-bottom: 26px solid var(--spark);
+  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.7));
+  z-index: 4;
+  /* el transform lo setea el JS: translate(-50%,-50%) rotate(a) translateY(-70px) */
+}
+.wb__pointer[hidden] {
+  display: none;
+}
+
+/* ---------- Jugadores en circulo ---------- */
+
+.wb__player {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: clamp(84px, 15vmin, 120px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  z-index: 2;
+}
+
+.wb__pname {
+  font-weight: 800;
+  font-size: clamp(0.85rem, 2.4vmin, 1.15rem);
+  color: var(--name);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.wb__badge {
+  height: 1.25em;
+  line-height: 1;
+  font-size: clamp(0.8rem, 2vmin, 1rem);
+  letter-spacing: 1px;
+}
+.wb__skull {
+  filter: grayscale(0.2);
+}
+
+.wb__avatar {
+  width: clamp(58px, 11vmin, 84px);
+  height: clamp(58px, 11vmin, 84px);
+  background: var(--plate);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.wb__avatar-svg {
+  width: 78%;
+  height: 78%;
+  fill: var(--silhouette);
+}
+
+.wb__word {
+  min-height: 1.3em;
+  font-weight: 800;
+  font-size: clamp(0.8rem, 2.2vmin, 1.1rem);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  max-width: 130%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Turno: nombre verde encendido + avatar resaltado. */
+.wb__player.is-turn .wb__pname {
+  color: var(--turn);
+}
+.wb__player.is-turn .wb__avatar {
+  outline: 3px solid var(--turn);
+  outline-offset: 2px;
+  box-shadow: 0 0 18px rgba(70, 209, 106, 0.5);
+}
+.wb__player.is-turn .wb__word {
+  color: var(--name);
+}
+
+/* Yo: nombre subrayado (sutil, para ubicarme). */
+.wb__player.is-me .wb__pname {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Eliminado: tachado y atenuado. */
+.wb__player.is-out {
+  opacity: 0.55;
+}
+.wb__player.is-out .wb__pname,
+.wb__player.is-out .wb__word {
+  text-decoration: line-through;
+}
+.wb__player.is-out .wb__avatar-svg {
+  fill: #4a4a4a;
+}
+
+/* Desconectado (sigue en la ronda): en cursiva y gris. */
+.wb__player.is-off .wb__pname {
+  font-style: italic;
+  color: var(--muted);
+}
+
+/* Rechazo / aceptada bajo el avatar. */
+.wb__player.is-reject {
+  animation: wb-shake 0.35s;
+}
+.wb__word.is-reject {
+  color: var(--danger);
+  text-decoration: none;
+}
+.wb__word.is-accept {
+  color: var(--turn);
+  animation: wb-stamp 0.4s;
+}
+
+/* ---------- Cartel de mensaje ---------- */
+
+.wb__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.wb__overlay[hidden] {
+  display: none;
+}
+
+.wb__card {
+  max-width: 460px;
+  width: 100%;
+  text-align: center;
+  padding: 34px 28px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  border-radius: 16px;
+  background: #2c2724;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.wb__title {
+  margin: 0 0 14px;
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  color: var(--name);
+}
+.wb__body {
+  margin: 0 0 20px;
+  font-size: 1.05rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.wb__btn {
+  font: inherit;
+  font-weight: 800;
+  font-size: 1rem;
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--turn);
+  color: #10231a;
+  cursor: pointer;
+}
+.wb__btn:hover {
+  filter: brightness(1.08);
+}
+
+/* ---------- Countdown ---------- */
+
+.wb__countdown {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  font-size: clamp(5rem, 22vw, 12rem);
+  font-weight: 900;
+  color: var(--name);
+  text-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+.wb__countdown[hidden] {
+  display: none;
+}
+.wb__countdown.is-pop {
+  animation: countdown-pop var(--step, 700ms) ease-out;
+}
+
+@keyframes countdown-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  30% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+}
+
+@keyframes wb-shake {
+  0%,
+  100% {
+    transform: translate(-50%, -50%);
+  }
+  25% {
+    transform: translate(calc(-50% - 6px), -50%);
+  }
+  75% {
+    transform: translate(calc(-50% + 6px), -50%);
+  }
+}
+
+@keyframes wb-stamp {
+  0% {
+    transform: scale(0.7) rotate(-3deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.15) rotate(1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
