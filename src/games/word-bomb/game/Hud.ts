@@ -16,16 +16,88 @@ export interface PlayView {
   usedCount: number;
 }
 
-/** Avatar generico compartido por todos (silueta violeta sobre placa gris). La
- *  identidad la da el nombre, no una imagen. Ver DESIGN.md ("Mesa de bomba"). */
-const AVATAR_SVG = `
-  <svg class="wb__avatar-svg" viewBox="0 0 64 64" aria-hidden="true">
-    <circle cx="32" cy="24" r="12"></circle>
-    <path d="M12 56c0-11 9-18 20-18s20 7 20 18z"></path>
+/**
+ * Personaje generico compartido por todos: una bocha violeta con cara que reacciona
+ * al estado (ver DESIGN.md "Fiesta de la bomba"). Todas las variantes de ojos/cejas/
+ * boca/sudor viven en el SVG y el CSS muestra la que corresponde segun las clases de
+ * la tarjeta (`is-turn`, `is-out`, `is-happy`) y el `is-critical` del stage. La
+ * identidad la da el nombre, no una imagen propia.
+ */
+const CHARACTER_SVG = `
+  <svg class="wb__face" viewBox="0 0 64 76" aria-hidden="true">
+    <path class="wb__face-body" d="M32 5C47 5 55 19 55 39 55 62 45 73 32 73 19 73 9 62 9 39 9 19 17 5 32 5Z"/>
+    <ellipse class="wb__face-hi" cx="24" cy="24" rx="9" ry="11"/>
+    <g class="wb__eyes">
+      <ellipse cx="24" cy="34" rx="6.5" ry="7.5" fill="#fff"/>
+      <ellipse cx="40" cy="34" rx="6.5" ry="7.5" fill="#fff"/>
+      <circle cx="25" cy="35" r="3.2" fill="#241033"/>
+      <circle cx="41" cy="35" r="3.2" fill="#241033"/>
+    </g>
+    <g class="wb__brows"><path d="M18 26 30 30"/><path d="M46 26 34 30"/></g>
+    <g class="wb__eyes-dead"><path d="M20 30 28 38M28 30 20 38"/><path d="M36 30 44 38M44 30 36 38"/></g>
+    <path class="wb__sweat" d="M50 29C50 29 45 38 49 42 53 45 55 38 50 29Z"/>
+    <path class="wb__mouth wb__mouth--neutral" d="M26 50Q32 54 38 50"/>
+    <path class="wb__mouth wb__mouth--focus" d="M27 51 37 51"/>
+    <ellipse class="wb__mouth wb__mouth--panic" cx="32" cy="52" rx="5" ry="6"/>
+    <path class="wb__mouth wb__mouth--happy" d="M25 48Q32 59 39 48Z"/>
+    <path class="wb__mouth wb__mouth--dead" d="M26 54Q29 51 32 54 35 57 38 54"/>
+  </svg>`;
+
+/** Corazon (vida) dibujado — nada de emojis (regla del repo). */
+const HEART_SVG = `
+  <svg class="wb__heart" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 21C12 21 3 14.4 3 8.5 3 5.5 5.4 3.5 8 3.5 9.9 3.5 11.4 4.7 12 6 12.6 4.7 14.1 3.5 16 3.5 18.6 3.5 21 5.5 21 8.5 21 14.4 12 21 12 21Z"/>
+  </svg>`;
+
+/** Calavera (eliminado) dibujada. */
+const SKULL_SVG = `
+  <svg class="wb__skull" viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 2C6.9 2 3.5 5.6 3.5 10.4 3.5 13 4.9 15.1 6.7 16.3L6.7 19 9 19 9 17 11 17 11 19 13 19 13 17 15 17 15 19 17.3 19 17.3 16.3C19.1 15.1 20.5 13 20.5 10.4 20.5 5.6 17.1 2 12 2Z" fill="#d8d2c8"/>
+    <circle cx="8.6" cy="11" r="2.1" fill="#241033"/>
+    <circle cx="15.4" cy="11" r="2.1" fill="#241033"/>
+    <path d="M12 13.4 10.6 16 13.4 16Z" fill="#241033"/>
   </svg>`;
 
 /** Radio del circulo de jugadores, como fraccion del semilado de la arena. */
 const RING_RADIUS = 0.37;
+
+/** Cantidad de brasas de ambiente (ver DESIGN.md). */
+const EMBER_COUNT = 16;
+/** Esquirlas que salen disparadas en la explosion. */
+const BOOM_SHARDS = 12;
+/** Duracion total de la explosion (limpieza del DOM). */
+const BOOM_MS = 700;
+
+/** Aleatorio en [a, b). */
+const rnd = (a: number, b: number): number => a + Math.random() * (b - a);
+
+/** Circunferencia del anillo de mecha (r=46 en el viewBox 100x100 del SVG). */
+const FUSE_CIRC = 2 * Math.PI * 46;
+/** El anillo es un arco de 300deg (deja un hueco de 60deg arriba, por donde sale la
+ *  mecha, para que el aro nunca cruce el pabilo). El .wb__fuse va rotado -60deg y el
+ *  track dibuja este arco por CSS; la barra usa esta longitud como maximo. */
+const FUSE_ARC = FUSE_CIRC * (300 / 360);
+/** Alto de la mecha a full (% del alto de la bomba); se acorta con el tiempo hasta 0
+ *  (la chispa baja quemando el pabilo). Debe coincidir con el `height` de `.wb__wick`. */
+const WICK_FULL_PCT = 40;
+/** La mecha se quema con `frac^WICK_EXP` (no lineal): como es corta y la chispa es un
+ *  blob, en lineal "parece quemada" antes de que el anillo termine. Con exp < 1
+ *  retiene mas largo a fraccion baja, asi su quemado coincide con el vaciado del aro. */
+const WICK_EXP = 0.6;
+/** Debajo de esta fraccion la mecha entra en "critico" (pulso + rojo). */
+const FUSE_CRITICAL = 0.25;
+
+/**
+ * Color del contador por fraccion restante: de chispa amarilla (lleno) a rojo
+ * peligro (por agotarse), interpolado en RGB. Mismos tonos que --spark / --danger.
+ */
+function fuseColor(frac: number): string {
+  const t = Math.max(0, Math.min(1, frac));
+  const r = Math.round(226 + (245 - 226) * t);
+  const g = Math.round(59 + (197 - 59) * t);
+  const b = Math.round(59 + (24 - 59) * t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
 /**
  * DOM de Bomba Palabra (estetica "mesa de bomba", ver DESIGN.md): los jugadores
@@ -40,10 +112,22 @@ export class Hud {
   private readonly stage: HTMLDivElement;
   private readonly arena: HTMLDivElement;
   private readonly bombFragEl: HTMLDivElement;
+  private readonly bombTimeEl: HTMLDivElement;
+  private readonly fuseEl: SVGSVGElement;
+  private readonly fuseBar: SVGCircleElement;
+  private readonly wickEl: HTMLDivElement;
+  private readonly bombEl: HTMLDivElement;
+  private readonly boomEl: HTMLDivElement;
   private readonly pointer: HTMLDivElement;
+  private boomTimer = 0;
   private readonly input: HTMLInputElement;
   private readonly overlay: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
+
+  /** Mecha visible: anclaje al reloj monotono local para animar sin drift. */
+  private fuseEnd = 0;
+  private fuseTotalMs = 0;
+  private fuseRaf: number | null = null;
 
   /** Celda de palabra por jugador (para actualizar el tipeo sin re-render). */
   private wordEls = new Map<string, HTMLDivElement>();
@@ -60,11 +144,21 @@ export class Hud {
     wrap.className = "wb";
     wrap.innerHTML = `
       <div class="wb__stage" hidden>
+        <div class="wb__embers" aria-hidden="true"></div>
         <div class="wb__arena">
+          <div class="wb__socket" aria-hidden="true"></div>
+          <svg class="wb__fuse" viewBox="0 0 100 100" hidden aria-hidden="true">
+            <circle class="wb__fuse-track" cx="50" cy="50" r="46"></circle>
+            <circle class="wb__fuse-bar" cx="50" cy="50" r="46"></circle>
+          </svg>
           <div class="wb__bomb">
+            <div class="wb__wick" aria-hidden="true"><span class="wb__spark"></span></div>
+            <div class="wb__collar" aria-hidden="true"></div>
             <div class="wb__bomb-frag"></div>
+            <div class="wb__bomb-time"></div>
           </div>
           <div class="wb__pointer" hidden></div>
+          <div class="wb__boom" aria-hidden="true"></div>
         </div>
         <input class="wb__input" type="text" inputmode="text" autocapitalize="off"
                autocomplete="off" autocorrect="off" spellcheck="false" maxlength="32"
@@ -78,10 +172,19 @@ export class Hud {
     this.stage = wrap.querySelector(".wb__stage")!;
     this.arena = wrap.querySelector(".wb__arena")!;
     this.bombFragEl = wrap.querySelector(".wb__bomb-frag")!;
+    this.bombTimeEl = wrap.querySelector(".wb__bomb-time")!;
+    this.fuseEl = wrap.querySelector(".wb__fuse")!;
+    this.fuseBar = wrap.querySelector(".wb__fuse-bar")!;
+    this.wickEl = wrap.querySelector(".wb__wick")!;
+    this.bombEl = wrap.querySelector(".wb__bomb")!;
+    this.boomEl = wrap.querySelector(".wb__boom")!;
     this.pointer = wrap.querySelector(".wb__pointer")!;
     this.input = wrap.querySelector(".wb__input")!;
     this.overlay = wrap.querySelector(".wb__overlay")!;
     this.countdownEl = wrap.querySelector(".wb__countdown")!;
+
+    // Brasas de ambiente (ver DESIGN.md): suben lento de fondo, por detras de todo.
+    this.buildEmbers(wrap.querySelector(".wb__embers")!);
 
     // Enter envia; el texto tipeado se refleja bajo el avatar propio en vivo.
     this.input.addEventListener("keydown", (e) => {
@@ -181,17 +284,18 @@ export class Hud {
       card.style.top = `${y}%`;
 
       const badge = p.alive
-        ? `<span class="wb__hearts">${"❤️".repeat(Math.max(0, p.lives))}</span>`
-        : `<span class="wb__skull">\u{1F480}</span>`;
+        ? `<span class="wb__hearts">${HEART_SVG.repeat(Math.max(0, p.lives))}</span>`
+        : `<span class="wb__skull-badge">${SKULL_SVG}</span>`;
 
       // La palabra bajo el avatar: el que tiene el turno arranca vacio (se llena
       // con el tipeo en vivo); el resto muestra su ultima palabra aceptada.
       const word = p.isTurn ? "" : p.lastWord;
 
       card.innerHTML = `
+        <div class="wb__bubble" aria-hidden="true">&iexcl;R&Aacute;PIDO!</div>
         <div class="wb__pname">${escapeHtml(p.nickname)}</div>
         <div class="wb__badge">${badge}</div>
-        <div class="wb__avatar">${AVATAR_SVG}</div>
+        <div class="wb__avatar">${CHARACTER_SVG}</div>
         <div class="wb__word">${escapeHtml(word)}</div>
       `;
       this.arena.appendChild(card);
@@ -203,7 +307,10 @@ export class Hud {
     this.bombFragEl.textContent = view.fragment ? view.fragment.toUpperCase() : "";
     if (turnAngle !== null) {
       this.pointer.hidden = false;
-      this.pointer.style.transform = `translate(-50%, -50%) rotate(${turnAngle}deg) translateY(-70px)`;
+      // La distancia escala y queda por fuera del anillo Y de la punta de la mecha
+      // (que vive fija arriba de la bomba), asi la flecha no se encima con ellos.
+      this.pointer.style.transform =
+        `translate(-50%, -50%) rotate(${turnAngle}deg) translateY(calc(-1 * clamp(96px, 20vmin, 150px)))`;
     } else {
       this.pointer.hidden = true;
     }
@@ -211,6 +318,105 @@ export class Hud {
     this.setInputEnabled(view.myTurn);
     if (view.myTurn) this.setWord(this.me, this.input.value);
   }
+
+  /**
+   * Explosion de la bomba: flash + onda expansiva + esquirlas + sacudida. Un golpe
+   * seco y calido (ver DESIGN.md). Se dispara cuando un jugador pierde una vida (la
+   * mecha llego a 0), desde `Game.playDiffSounds`.
+   */
+  flashExplosion(): void {
+    let html = `<div class="wb__boom-flash"></div><div class="wb__boom-ring"></div>`;
+    for (let i = 0; i < BOOM_SHARDS; i++) {
+      const angle = (360 / BOOM_SHARDS) * i + rnd(-12, 12);
+      html += `<span class="wb__boom-shard" style="--a:${angle.toFixed(1)}deg;--d:${rnd(56, 120).toFixed(0)}px"></span>`;
+    }
+    this.boomEl.innerHTML = html;
+    // Reinicia las animaciones (reflow) por si ya habia una en curso.
+    this.boomEl.classList.remove("is-on");
+    this.bombEl.classList.remove("is-boom");
+    void this.boomEl.offsetWidth;
+    this.boomEl.classList.add("is-on");
+    this.bombEl.classList.add("is-boom");
+    window.clearTimeout(this.boomTimer);
+    this.boomTimer = window.setTimeout(() => {
+      this.boomEl.classList.remove("is-on");
+      this.bombEl.classList.remove("is-boom");
+      this.boomEl.innerHTML = "";
+    }, BOOM_MS);
+  }
+
+  /** Siembra las brasas de ambiente con posicion/tamano/tiempos aleatorios. */
+  private buildEmbers(host: HTMLDivElement): void {
+    for (let i = 0; i < EMBER_COUNT; i++) {
+      const e = document.createElement("span");
+      e.className = "wb__ember";
+      const size = rnd(3, 7);
+      e.style.left = `${rnd(2, 98)}%`;
+      e.style.width = `${size}px`;
+      e.style.height = `${size}px`;
+      e.style.animationDuration = `${rnd(6, 13)}s`;
+      e.style.animationDelay = `${-rnd(0, 13)}s`; // desfasadas desde el arranque
+      host.appendChild(e);
+    }
+  }
+
+  // ---------- Mecha visible (anillo + segundos) ----------
+
+  /**
+   * Arranca/actualiza el anillo de la mecha. `remainingMs` y `totalMs` vienen del
+   * server; se anclan al reloj monotono local (`performance.now()`) para animar
+   * sin depender del epoch del server (cero drift de reloj). Idempotente: llamarla
+   * en cada snapshot solo re-ancla; el loop rAF ya en curso toma los nuevos valores.
+   */
+  setFuse(remainingMs: number, totalMs: number): void {
+    // Guarda contra valores no finitos (p.ej. un server viejo que manda undefined).
+    if (!Number.isFinite(remainingMs) || !Number.isFinite(totalMs) || totalMs <= 0) {
+      this.clearFuse();
+      return;
+    }
+    this.fuseEnd = performance.now() + remainingMs;
+    this.fuseTotalMs = totalMs;
+    this.fuseEl.removeAttribute("hidden"); // SVGSVGElement no tipa `hidden` como prop
+    if (this.fuseRaf === null) this.tickFuse();
+  }
+
+  /** Oculta y detiene la mecha (fuera de "playing", game over). */
+  clearFuse(): void {
+    if (this.fuseRaf !== null) {
+      cancelAnimationFrame(this.fuseRaf);
+      this.fuseRaf = null;
+    }
+    this.fuseEl.setAttribute("hidden", "");
+    this.fuseEl.classList.remove("is-critical");
+    this.stage.classList.remove("is-critical");
+    this.bombTimeEl.textContent = "";
+    this.wickEl.style.removeProperty("height"); // vuelve al alto full del CSS
+  }
+
+  private readonly tickFuse = (): void => {
+    const remaining = Math.max(0, this.fuseEnd - performance.now());
+    const frac = this.fuseTotalMs > 0 ? Math.min(1, remaining / this.fuseTotalMs) : 0;
+    // La barra es un sub-arco del track (arco de 300deg): largo = frac * arco, desde
+    // el inicio del arco. Nunca entra en el hueco de arriba (max = FUSE_ARC).
+    this.fuseBar.style.strokeDasharray = `${FUSE_ARC * frac} ${FUSE_CIRC}`;
+    // La mecha se quema con el tiempo: se acorta y la chispa (su punta) baja hacia la
+    // bomba. Curva `frac^WICK_EXP` para que su quemado coincida con el vaciado del aro
+    // (ver WICK_EXP). Se resetea sola al pasar de turno (setFuse re-ancla con frac ~1).
+    this.wickEl.style.height = `${(WICK_FULL_PCT * Math.pow(frac, WICK_EXP)).toFixed(1)}%`;
+    const color = fuseColor(frac);
+    this.fuseBar.style.stroke = color;
+    this.bombTimeEl.style.color = color;
+    this.bombTimeEl.textContent = remaining > 0 ? String(Math.ceil(remaining / 1000)) : "";
+    const critical = remaining > 0 && frac <= FUSE_CRITICAL;
+    this.fuseEl.classList.toggle("is-critical", critical);
+    // El stage marca "critico": el jugador de turno entra en panico (cara + gota +
+    // globo "RAPIDO!") via CSS. Lo hace la tickFuse porque el panico depende del
+    // tiempo, no de un cambio de estado del server.
+    this.stage.classList.toggle("is-critical", critical);
+    // Al llegar a 0 se detiene y queda vacio: el server difundira la explosion /
+    // el nuevo turno, que re-ancla la mecha via setFuse.
+    this.fuseRaf = remaining > 0 ? requestAnimationFrame(this.tickFuse) : null;
+  };
 
   /** Actualiza la palabra bajo el avatar de un jugador (tipeo en vivo o aceptada). */
   private setWord(nickname: string, text: string): void {
@@ -259,8 +465,13 @@ export class Hud {
     }
   }
 
-  /** Sello de palabra aceptada bajo el avatar de quien la escribio. */
+  /** Sello de palabra aceptada bajo el avatar + carita feliz breve de quien acerto. */
   flashAccept(player: string, word: string): void {
+    const card = this.cardEls.get(player);
+    if (card) {
+      card.classList.add("is-happy");
+      window.setTimeout(() => card.classList.remove("is-happy"), 800);
+    }
     const el = this.wordEls.get(player);
     if (!el) return;
     el.textContent = word;
