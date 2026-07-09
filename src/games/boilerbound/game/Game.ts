@@ -225,7 +225,6 @@ export class Game {
         dashPressed: this.input.consumeDashPressed(),
       });
       if (events.jumped) SoundEffects.playJump();
-      if (events.wallJumped) SoundEffects.playWallJump();
       if (events.dashed) {
         SoundEffects.playDash();
         this.particles.burst(this.player.x, this.player.y + 0.5, 8, {
@@ -241,7 +240,7 @@ export class Game {
         this.hud.flashBanner("¡SOBRECARGA!");
       }
 
-      if (!this.player.invulnerable && this.field.isPlayerHit(this.player.x, this.player.halfWidth, this.player.y)) {
+      if (!this.player.invulnerable && this.field.isPlayerHit(this.player.x, this.player.hurtHalfWidth, this.player.y)) {
         this.endGame();
       }
 
