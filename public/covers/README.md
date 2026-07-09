@@ -163,3 +163,27 @@ Square 1:1 video game cover art, bold indie game key art style, dramatic cinemat
 ```text
 Square 1:1 video game cover art, bold indie game key art style, vibrant saturated colors, dramatic lighting, clean minimalist composition with a strong focal subject, slight retro-arcade flavor, high detail digital illustration, no watermark, no borders. Three tall glossy vertical color sliders standing side by side, each with a shiny white circular knob: the first slider a full rainbow hue spectrum, the second a saturation gradient, the third a brightness gradient fading to black, glowing softly. Beside them a large stylized human eye reflecting a swatch of a single vivid color, and a faint after-image ghost of that same color fading in the dark, evoking color perception and memory. Bold split background of two mismatched vivid color fields, electric teal and hot magenta, high-contrast Swiss editorial poster meets neon arcade look. The game title "MEMORIA DE COLOR" is integrated into the artwork as a bold stylized videogame logo, large and readable, spelled exactly "MEMORIA DE COLOR".
 ```
+
+## Número Fugaz — guardar como `number-memory.jpg`
+
+```text
+Square 1:1 video game cover art, bold indie game key art style, vibrant saturated colors, dramatic lighting, clean composition with a strong focal subject, slight retro-arcade flavor, high detail digital illustration, no watermark, no borders. A big bold sequence of glowing cream-white neon digits (like 4 7 3 9) with a thick hot-magenta 3D offset outline, floating on a deep indigo-eggplant background lit by a magenta glow above and an aqua-cyan glow below; the digits starting to dissolve and streak away as if a flash fading, with sparks and thin light trails. Electric magenta and aqua-cyan neon palette over deep indigo, playful energetic arcade mood with chunky sticker-like depth. The game title "NÚMERO FUGAZ" is integrated into the artwork as a bold stylized videogame logo with a thick outline and offset shadow, large and readable, spelled exactly "NÚMERO FUGAZ".
+```
+
+## Constelación — guardar como `visual-memory.jpg`
+
+```text
+Square 1:1 video game cover art, bold indie game key art style, vibrant saturated colors, dramatic lighting, clean composition with a strong focal subject, slight retro-arcade flavor, high detail digital illustration, no watermark, no borders. A chunky 3D grid of rounded glossy blocks floating on a deep navy-blue background with a soft violet glow; several blocks light up bright glowing orange forming a constellation-like pattern, each block with a thick hard drop shadow underneath giving a playful sticker-like 3D relief, small sparkles and faint light trails linking the lit blocks. Warm orange and purple-violet palette over deep navy, energetic and playful arcade mood, bold and clean. The game title "CONSTELACIÓN" is integrated into the artwork as a bold stylized videogame logo with a thick outline and offset shadow, large and readable, spelled exactly "CONSTELACIÓN".
+```
+
+## Tinta — guardar como `stroop.jpg`
+
+```text
+Square 1:1 video game cover art, bold indie game key art style, vibrant saturated colors, dramatic lighting, clean composition with a strong focal subject, slight retro-arcade flavor, high detail digital illustration, no watermark, no borders. On a dark warm-charcoal background, a huge bold chunky word that reads "AZUL" (the Spanish word for blue) painted in glowing RED ink with a thick 3D sticker outline, illustrating the Stroop color-word conflict; below it a row of four glossy 3D color swatch buttons (red, green, blue, yellow) with hard drop shadows, and a thin draining timer bar. Monochrome charcoal stage so the vivid colors pop, energetic reflex-game mood, high contrast. The game title "TINTA" is integrated into the artwork as a bold stylized videogame logo with a thick outline and offset shadow, large and readable, spelled exactly "TINTA".
+```
+
+## Prisma — guardar como `color-switch.jpg`
+
+```text
+Square 1:1 video game cover art, bold indie game key art style, vibrant saturated colors, dramatic lighting, clean composition with a strong focal subject, slight retro-arcade flavor, high detail digital illustration, no watermark, no borders. A glossy glowing ball on a near-black background rising through a tower of rotating geometric shapes, each shape's outline split into four bright neon colors (hot pink, cyan, lime-green, amber): a circular ring, a square, a pentagon and a hexagon receding upward, all glowing. The ball glows in one of those colors with a soft halo and a white specular highlight, small sparkles and light trails around it. Electric four-color neon spectrum palette (hot pink, cyan, lime, amber) over deep near-black, energetic playful arcade mood, high contrast. The game title "PRISMA" is integrated into the artwork as a bold stylized videogame logo with a rainbow spectrum gradient fill and a thick dark outline, large and readable, spelled exactly "PRISMA".
+```
