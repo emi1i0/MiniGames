@@ -268,21 +268,6 @@ a {
   border-color: var(--ink);
 }
 
-/* Fila Volver / Crear sala: mismo alto y ancho, sin el margen del primary. */
-.rooms__create-actions {
-  margin-top: 20px;
-  align-items: stretch;
-}
-
-.rooms__create-actions .btn {
-  flex: 1;
-}
-
-.rooms__create-actions .btn--primary {
-  width: auto;
-  margin-top: 0;
-}
-
 /* ---------- Choices (pills punteadas) ---------- */
 .choices {
   display: flex;
