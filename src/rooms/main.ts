@@ -5,12 +5,17 @@ import { getNickname, setNickname, NICKNAME_MAX } from "../shared/nickname";
 import {
   castVote,
   createRoom,
+  fetchPublicRooms,
   fetchRoomState,
   joinRoom,
   kickPlayer,
+  leaveRoom,
   openVote,
+  purgeStaleRooms,
   sanitizeCode,
+  setVisibility,
   startBriefing,
+  touchRoom,
   updateSettings,
 } from "../shared/room/api";
 import { RoomChannel } from "../shared/room/channel";
@@ -25,11 +30,14 @@ import {
   DEFAULT_ROUND_TIME_LIMIT,
   DEFAULT_TOTAL_ROUNDS,
   formatRoundTimeLimit,
+  HEARTBEAT_MS,
   MAX_ROOM_PLAYERS,
   ROUND_TIME_LIMIT_OPTIONS,
   TOTAL_ROUNDS_OPTIONS,
+  type PublicRoom,
   type RoomSettings,
   type RoomState,
+  type RoomVisibility,
 } from "../shared/room/types";
 
 /**
@@ -68,7 +76,12 @@ main.append(header, stack);
 
 app.append(topbar, main);
 
-const prefillCode = sanitizeCode(new URLSearchParams(location.search).get("code") ?? "");
+// Codigo de la URL (link compartido). Se limpia al ser expulsado, para que un
+// F5 no vuelva a meter al jugador en la sala de la que lo acaban de echar.
+let prefillCode = sanitizeCode(new URLSearchParams(location.search).get("code") ?? "");
+
+/** Cada cuanto se re-lista "Salas abiertas" mientras la home esta montada. */
+const BROWSE_REFRESH_MS = 8000;
 
 if (!isLeaderboardEnabled()) {
   const panel = document.createElement("div");
@@ -174,13 +187,37 @@ function renderHome(joinProblem?: string): void {
 
   // Crear una sala: se crea al toque con los ajustes por defecto y el host cae
   // directo en el lobby, donde ya tiene el panel "Ajustes" para configurarla
-  // antes de empezar (no hay pantalla intermedia).
+  // antes de empezar (no hay pantalla intermedia). Lo unico que se elige aca es
+  // la visibilidad, porque decide si la sala aparece en el listado de arriba.
   const createPanel = document.createElement("div");
   createPanel.className = "panel";
   createPanel.innerHTML = `
     <div class="panel__title">Crear una sala</div>
     <p class="hint">Armá una sala nueva, configurá los ajustes ahí mismo y compartí el código con tus amigos.</p>
   `;
+  let visibility: RoomVisibility = "public";
+  const visLabel = document.createElement("div");
+  visLabel.className = "panel__label";
+  visLabel.textContent = "Quien puede entrar";
+  const visChoices = buildChoices(
+    [
+      { value: 0, label: "Pública" },
+      { value: 1, label: "Privada" },
+    ],
+    0,
+    (v) => {
+      visibility = v === 1 ? "private" : "public";
+      visHint.textContent = visHintText();
+    },
+  );
+  const visHintText = (): string =>
+    visibility === "public"
+      ? "Aparece en la lista de salas abiertas: cualquiera puede unirse."
+      : "No aparece en la lista: solo entran los que tengan el código o el link.";
+  const visHint = document.createElement("p");
+  visHint.className = "hint";
+  visHint.textContent = visHintText();
+
   const createBtn = document.createElement("button");
   createBtn.className = "btn btn--primary";
   createBtn.type = "button";
@@ -199,7 +236,7 @@ function renderHome(joinProblem?: string): void {
         timeVote: false,
       };
       createBtn.disabled = true;
-      const code = await createRoom(player, settings);
+      const code = await createRoom(player, settings, visibility);
       createBtn.disabled = false;
       if (!code) {
         createError.textContent = "No se pudo crear la sala. Proba de nuevo.";
@@ -208,10 +245,108 @@ function renderHome(joinProblem?: string): void {
       renderLobby(code, player);
     })();
   });
-  createPanel.append(createBtn, createError);
+  createPanel.append(visLabel, visChoices, visHint, createBtn, createError);
 
-  stack.append(namePanel, joinPanel, createPanel);
+  const browsePanel = buildBrowsePanel(requireName, (problem) => {
+    joinError.textContent = problem;
+  });
+
+  stack.append(namePanel, browsePanel, joinPanel, createPanel);
   if (prefillCode) codeInput.focus();
+}
+
+/**
+ * Listado de salas publicas abiertas (en el lobby y con gente). Se refresca solo
+ * cada BROWSE_REFRESH_MS mientras la home este montada; cada fila entra directo
+ * con joinFlow, igual que el codigo tipeado a mano.
+ */
+function buildBrowsePanel(
+  requireName: () => string | null,
+  onProblem: (problem: string) => void,
+): HTMLDivElement {
+  const panel = document.createElement("div");
+  panel.className = "panel";
+  panel.innerHTML = `<div class="panel__title">Salas abiertas</div>`;
+
+  const list = document.createElement("ul");
+  list.className = "browse";
+  const empty = document.createElement("p");
+  empty.className = "hint";
+  empty.textContent = "Cargando salas...";
+  panel.append(list, empty);
+
+  let joining = false;
+
+  const render = (rooms: PublicRoom[]): void => {
+    // La home se re-renderiza entera (renderHome vacia el stack): si este panel
+    // ya no esta en el DOM, cortar el refresco.
+    if (!panel.isConnected) {
+      window.clearInterval(timer);
+      return;
+    }
+    list.innerHTML = "";
+    if (rooms.length === 0) {
+      empty.textContent = "No hay salas públicas abiertas. Creá una y compartí el código.";
+      empty.style.display = "";
+      return;
+    }
+    empty.style.display = "none";
+    for (const room of rooms) {
+      const full = room.players >= MAX_ROOM_PLAYERS;
+      const li = document.createElement("li");
+      li.className = "browse__row";
+
+      const info = document.createElement("div");
+      info.className = "browse__info";
+      const name = document.createElement("span");
+      name.className = "browse__host";
+      name.textContent = `Sala de ${room.host}`;
+      const meta = document.createElement("span");
+      meta.className = "browse__meta";
+      const games = room.settings.playlist
+        ? `${room.settings.playlist.length} juegos elegidos`
+        : `${room.settings.totalRounds} juegos a votar`;
+      meta.textContent = `${room.players}/${MAX_ROOM_PLAYERS} jugadores · ${games}`;
+      info.append(name, meta);
+
+      const btn = document.createElement("button");
+      btn.className = "btn browse__join";
+      btn.type = "button";
+      btn.textContent = full ? "Llena" : "Unirse";
+      btn.disabled = full;
+      btn.addEventListener("click", () => {
+        void (async () => {
+          if (joining) return;
+          const player = requireName();
+          if (!player) return;
+          joining = true;
+          btn.disabled = true;
+          const problem = await joinFlow(room.code, player);
+          joining = false;
+          if (problem) {
+            btn.disabled = full;
+            onProblem(problem);
+            void refresh();
+          }
+        })();
+      });
+
+      li.append(info, btn);
+      list.append(li);
+    }
+  };
+
+  const refresh = async (): Promise<void> => {
+    const rooms = await fetchPublicRooms();
+    render(rooms);
+  };
+
+  const timer = window.setInterval(() => void refresh(), BROWSE_REFRESH_MS);
+  // Purga las salas muertas antes del primer listado, asi no se muestran salas
+  // fantasma de pestanas cerradas sin cron ni server.
+  void purgeStaleRooms().then(() => refresh());
+
+  return panel;
 }
 
 /**
@@ -439,7 +574,7 @@ function buildSettingsForm(
   const playlistHint = document.createElement("p");
   playlistHint.className = "hint";
   playlistHint.textContent =
-    "Elegi en orden la misma cantidad de juegos que marcaste arriba. Si no elegis ninguno, despues de cada juego se vota el siguiente entre 3 al azar.";
+    "Elegi en orden la misma cantidad de juegos que marcaste arriba. Si no elegis ninguno, despues de cada juego se vota el siguiente entre 5 al azar (puede repetirse alguno ya jugado).";
 
   wrap.append(
     roundsLabel,
@@ -629,7 +764,26 @@ function renderLobby(code: string, player: string): void {
   const waitingEl = document.createElement("div");
   waitingEl.className = "lobby__waiting";
 
-  playersPanel.append(startBtn, waitingEl);
+  // Salir de la sala: libera el slot. Si era el ultimo, la sala se borra; si era
+  // el host, la hereda el jugador mas antiguo (leaveRoom se encarga).
+  const leaveBtn = document.createElement("button");
+  leaveBtn.className = "btn lobby__leave";
+  leaveBtn.type = "button";
+  leaveBtn.textContent = "Salir de la sala";
+  leaveBtn.addEventListener("click", () => {
+    leaveBtn.disabled = true;
+    void (async () => {
+      await leaveRoom(code, player);
+      // Avisar antes de bajar el canal: los que quedan refrescan y me ven salir.
+      channel.ping();
+      teardown();
+      prefillCode = null;
+      history.replaceState(null, "", "/rooms/");
+      renderHome();
+    })();
+  });
+
+  playersPanel.append(startBtn, waitingEl, leaveBtn);
 
   // Dos columnas para el host: ajustes a la izquierda, codigo + jugadores a la
   // derecha. Los invitados ven una sola columna (codigo + jugadores).
@@ -656,8 +810,37 @@ function renderLobby(code: string, player: string): void {
   let voteTickId: number | null = null;
   let closingVote = false;
 
+  /** Corta todos los timers y el canal: al salir, al ser expulsado o al morir la sala. */
+  const teardown = (): void => {
+    window.clearInterval(pollId);
+    window.clearInterval(heartbeatId);
+    stopVoteTick();
+    voteOverlay?.hide();
+    channel.dispose();
+  };
+
   const buildHostForm = (initial: RoomSettings): void => {
     hostSettings = { ...initial };
+    // Publica / privada: no vive en settings (es una columna propia, porque el
+    // listado filtra por ella), asi que se guarda aparte del resto del form.
+    const visWrap = document.createElement("div");
+    const visLabel = document.createElement("div");
+    visLabel.className = "panel__label";
+    visLabel.textContent = "Quien puede entrar";
+    const visChoices = buildChoices(
+      [
+        { value: 0, label: "Pública" },
+        { value: 1, label: "Privada" },
+      ],
+      state?.room.visibility === "private" ? 1 : 0,
+      (v) => {
+        void setVisibility(code, v === 1 ? "private" : "public").then((ok) => {
+          if (ok) channel.ping();
+        });
+      },
+    );
+    visWrap.append(visLabel, visChoices);
+
     const form = buildSettingsForm(initial, (s) => {
       hostSettings = s;
       settingsError.textContent = "";
@@ -665,7 +848,7 @@ function renderLobby(code: string, player: string): void {
         if (ok) channel.ping();
       });
     });
-    settingsFormWrap.append(form);
+    settingsFormWrap.append(visWrap, form);
     settingsPanel.style.display = "";
     hostFormBuilt = true;
   };
@@ -714,7 +897,15 @@ function renderLobby(code: string, player: string): void {
         kickBtn.addEventListener("click", () => {
           kickBtn.disabled = true;
           void kickPlayer(code, p).then((ok) => {
-            if (ok) channel.ping();
+            if (ok) {
+              channel.ping();
+            } else {
+              // No se borro la fila: la DB no tiene la policy de delete de
+              // room_players (correr supabase/rooms.sql). Sin este aviso el
+              // host clickea y no pasa nada.
+              kickBtn.disabled = false;
+              settingsError.textContent = `No se pudo expulsar a ${p}.`;
+            }
             void refresh();
           });
         });
@@ -839,12 +1030,20 @@ function renderLobby(code: string, player: string): void {
 
   const refresh = async (): Promise<void> => {
     const fresh = await fetchRoomState(code);
-    if (!fresh) return;
-    // El anfitrion me expulso: ya no estoy en la sala, vuelvo al inicio.
+    // La sala ya no existe (se vacio y se borro, o la purgo alguien).
+    if (!fresh) {
+      teardown();
+      prefillCode = null;
+      history.replaceState(null, "", "/rooms/");
+      renderHome("La sala ya no existe.");
+      return;
+    }
+    // El anfitrion me expulso: ya no estoy en la sala, vuelvo al inicio. Se
+    // limpia el ?code de la URL para que un F5 no me vuelva a meter (autoJoin).
     if (!fresh.players.includes(player)) {
-      window.clearInterval(pollId);
-      stopVoteTick();
-      channel.dispose();
+      teardown();
+      prefillCode = null;
+      history.replaceState(null, "", "/rooms/");
       renderHome("El anfitrion te saco de la sala.");
       return;
     }
@@ -868,6 +1067,10 @@ function renderLobby(code: string, player: string): void {
   channel.onSync(() => void refresh());
   channel.onPresence(render);
   const pollId = window.setInterval(() => void refresh(), 5000);
+  // Heartbeat: mientras alguien tenga el lobby abierto la sala esta viva. Al
+  // cerrarse la ultima pestana deja de latir y la purga la borra.
+  void touchRoom(code);
+  const heartbeatId = window.setInterval(() => void touchRoom(code), HEARTBEAT_MS);
   void refresh();
 
   startBtn.addEventListener("click", () => {
@@ -911,11 +1114,7 @@ function renderLobby(code: string, player: string): void {
 
       // Sin playlist: se vota el primer juego aca en el lobby (mismo mecanismo que
       // las rondas siguientes). Al cerrar la votacion, el ganador va a su briefing.
-      const ok = await openVote(
-        code,
-        pickVoteOptions(state),
-        new Date(Date.now() + VOTE_SECONDS * 1000),
-      );
+      const ok = await openVote(code, pickVoteOptions(), new Date(Date.now() + VOTE_SECONDS * 1000));
       if (!ok) {
         starting = false;
         render();

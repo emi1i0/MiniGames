@@ -16,6 +16,7 @@ import {
   startRound,
   startTimeVote,
   takeOverHost,
+  touchRoom,
   updateDeadline,
 } from "./api";
 import { RoomChannel } from "./channel";
@@ -23,6 +24,7 @@ import { RoomOverlay, type StripLight, type WaitingEntry } from "./RoomOverlay";
 import { computeTotals, rankRound } from "./points";
 import {
   formatRoundTimeLimit,
+  HEARTBEAT_MS,
   NO_TIME_LIMIT,
   TIME_VOTE_OPTIONS,
   type RoomState,
@@ -289,6 +291,13 @@ class RoomModeController implements RoomMode {
 
     window.setInterval(() => this.tick(), TICK_MS);
     window.setInterval(() => void this.refresh(), POLL_MS);
+    // Heartbeat: mantiene viva la sala mientras se juega (los espectadores no
+    // cuentan como gente, asi que no la sostienen). Sin esto la purga borraria
+    // una sala en plena partida, ya que nadie esta mirando el lobby.
+    if (!this.spectator) {
+      void touchRoom(this.code);
+      window.setInterval(() => void touchRoom(this.code), HEARTBEAT_MS);
+    }
   }
 
   reportScore(finalScore: number): void {
@@ -855,7 +864,7 @@ class RoomModeController implements RoomMode {
         if (!fresh || fresh.room.status !== "results" || fresh.room.host !== this.me) return;
         if (fresh.room.current_round !== round) return;
         this.state = fresh;
-        const options = pickVoteOptions(fresh);
+        const options = pickVoteOptions();
         const deadline = new Date(Date.now() + VOTE_SECONDS * 1000);
         await this.hostAction(() => openVote(this.code, options, deadline));
       })();
@@ -1049,14 +1058,20 @@ class RoomModeController implements RoomMode {
   }
 }
 
-/** 3 juegos al azar que todavia no salieron (o los que queden; nunca vacio). */
-export function pickVoteOptions(state: RoomState): string[] {
-  const played = new Set(state.rounds.map((r) => r.game_id));
-  let pool = roomGames.map((g) => g.id).filter((id) => !played.has(id));
-  if (pool.length === 0) pool = roomGames.map((g) => g.id);
+/** Cuantos candidatos se ofrecen en cada votacion de juego. */
+export const VOTE_OPTION_COUNT = 5;
+
+/**
+ * Candidatos al azar para la votacion del proximo juego. Los ya jugados entran
+ * al sorteo igual que el resto: una sala puede repetir un juego (incluso el de
+ * la ronda recien terminada) si lo votan. Los candidatos de una misma votacion
+ * si son distintos entre si.
+ */
+export function pickVoteOptions(): string[] {
+  const pool = roomGames.map((g) => g.id);
 
   const picked: string[] = [];
-  while (picked.length < 3 && pool.length > 0) {
+  while (picked.length < VOTE_OPTION_COUNT && pool.length > 0) {
     const i = Math.floor(Math.random() * pool.length);
     picked.push(pool[i]);
     pool.splice(i, 1);
