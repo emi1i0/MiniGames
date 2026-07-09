@@ -172,75 +172,32 @@ function renderHome(joinProblem?: string): void {
     if (e.key === "Enter") void tryJoin();
   });
 
-  // Boton para pasar a la pantalla de crear una sala.
+  // Crear una sala: se crea al toque con los ajustes por defecto y el host cae
+  // directo en el lobby, donde ya tiene el panel "Ajustes" para configurarla
+  // antes de empezar (no hay pantalla intermedia).
   const createPanel = document.createElement("div");
   createPanel.className = "panel";
   createPanel.innerHTML = `
     <div class="panel__title">Crear una sala</div>
-    <p class="hint">Armá una sala nueva y compartí el código con tus amigos.</p>
+    <p class="hint">Armá una sala nueva, configurá los ajustes ahí mismo y compartí el código con tus amigos.</p>
   `;
   const createBtn = document.createElement("button");
   createBtn.className = "btn btn--primary";
   createBtn.type = "button";
   createBtn.textContent = "Crear sala";
-  createBtn.addEventListener("click", () => {
-    const player = requireName();
-    if (!player) return;
-    renderCreate();
-  });
-  createPanel.append(createBtn);
-
-  stack.append(namePanel, joinPanel, createPanel);
-  if (prefillCode) codeInput.focus();
-}
-
-// ---------- Crear una sala: ajustes + crear ----------
-
-function renderCreate(): void {
-  stack.innerHTML = "";
-  main.classList.remove("rooms--wide");
-
-  const createPanel = document.createElement("div");
-  createPanel.className = "panel";
-  createPanel.innerHTML = `<div class="panel__title">Crear una sala</div>`;
-
-  let settings: RoomSettings = {
-    totalRounds: DEFAULT_TOTAL_ROUNDS,
-    playlist: null,
-    roundTimeLimitSec: DEFAULT_ROUND_TIME_LIMIT,
-    timeVote: false,
-  };
-  const settingsForm = buildSettingsForm(settings, (s) => (settings = s));
-
-  const actions = document.createElement("div");
-  actions.className = "panel__row rooms__create-actions";
-  const backBtn = document.createElement("button");
-  backBtn.className = "btn";
-  backBtn.type = "button";
-  backBtn.textContent = "Volver";
-  backBtn.addEventListener("click", () => renderHome());
-  const createBtn = document.createElement("button");
-  createBtn.className = "btn btn--primary";
-  createBtn.type = "button";
-  createBtn.textContent = "Crear sala";
-  actions.append(backBtn, createBtn);
-
   const createError = document.createElement("div");
   createError.className = "error";
-
   createBtn.addEventListener("click", () => {
     void (async () => {
       createError.textContent = "";
-      const player = getNickname();
-      if (!player) {
-        renderHome();
-        return;
-      }
-      // O elegís todos los juegos de la lista, o ninguno (se votan al azar).
-      if (settings.playlist && settings.playlist.length !== settings.totalRounds) {
-        createError.textContent = `Elegí ${settings.totalRounds} juegos o ninguno.`;
-        return;
-      }
+      const player = requireName();
+      if (!player) return;
+      const settings: RoomSettings = {
+        totalRounds: DEFAULT_TOTAL_ROUNDS,
+        playlist: null,
+        roundTimeLimitSec: DEFAULT_ROUND_TIME_LIMIT,
+        timeVote: false,
+      };
       createBtn.disabled = true;
       const code = await createRoom(player, settings);
       createBtn.disabled = false;
@@ -251,9 +208,10 @@ function renderCreate(): void {
       renderLobby(code, player);
     })();
   });
+  createPanel.append(createBtn, createError);
 
-  createPanel.append(settingsForm, actions, createError);
-  stack.append(createPanel);
+  stack.append(namePanel, joinPanel, createPanel);
+  if (prefillCode) codeInput.focus();
 }
 
 /**

@@ -9,4 +9,5 @@ export const meta: GameEntry = {
   accent: "#38e07b",
   category: "Reflejos",
   order: 2,
+  added: "2026-07-03",
 };

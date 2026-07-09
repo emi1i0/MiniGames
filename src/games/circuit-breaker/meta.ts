@@ -12,6 +12,7 @@ export const meta: GameEntry = {
   accent: "#33e39a",
   category: "Precisión",
   order: 320,
+  added: "2026-07-06",
 };
 
 // El ranking se ordena por tiempo (menor mejor). Cada puntaje codifica el tiempo
