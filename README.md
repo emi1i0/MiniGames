@@ -57,6 +57,10 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Hole in None | Precisión | Tres hoyos de minigolf cartoon en 3D con molinetes, bumpers y atajos arriesgados. Arrastrá desde la pelota para apuntar, soltá para pegar y embocá en la menor cantidad de golpes. | [emi1i0](https://github.com/emi1i0) |
 | Bomba Palabra | Party | Bomba de palabras por turnos: aparece un fragmento (una sílaba o combo de letras) y tenés hasta que se agote la mecha para escribir una palabra real que lo contenga. Si explota perdés una vida; el último en pie gana. Solo se juega en salas con amigos. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Cálculo Flash | Puzzle | Aparecen números de a uno que se van sumando y restando; memorizalos y al final escribí el resultado. En solitario las rondas suben de dificultad y un error termina la partida; en salas todos ven la misma cuenta y ganás puntos por acercarte al resultado. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
+| Número Fugaz | Puzzle | Aparece un número un instante y se esfuma: memorizalo y escribilo. Cada acierto suma un dígito y un error termina la partida; tu marca es la mayor cantidad de dígitos que recordás de corrido. | [matiasgzlez](https://github.com/matiasgzlez) |
+| Constelación | Puzzle | Se encienden unas celdas de la grilla un instante: memorizá el patrón y volvé a marcarlas. Cada nivel suma celdas y agranda la grilla; con 3 vidas, tu marca es el nivel más alto que alcanzás. | [matiasgzlez](https://github.com/matiasgzlez) |
+| Prisma | Arcade | Tu bola cambia de color y sube por impulsos: cruzá cada anillo giratorio solo por el arco de tu mismo color. Un roce del color equivocado y perdés; tu marca es cuántos anillos cruzás. | [matiasgzlez](https://github.com/matiasgzlez) |
+| Tinta | Reflejos | El efecto Stroop hecho juego: aparece el nombre de un color pintado con otra tinta y tenés que tocar el color de la tinta, no lo que dice la palabra. El reloj drena, cada acierto suma tiempo; tu marca es cuántas tintas acertás. | [matiasgzlez](https://github.com/matiasgzlez) |
 
 ## Empezar
 
