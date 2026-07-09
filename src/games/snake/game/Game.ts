@@ -400,7 +400,9 @@ export class Game {
 
   private drawSnake(): void {
     const { ctx } = this;
-    const t = this.state === "playing" ? Math.min(this.stepAccum / this.stepInterval, 1) : 0;
+    // Fuera de "playing" la interpolacion se congela al final del paso (t = 1): al morir
+    // el paso no se aplica, y un t = 0 dibujaria prevCells (la vibora retrocede una celda).
+    const t = this.state === "playing" ? Math.min(this.stepAccum / this.stepInterval, 1) : 1;
     const n = this.cells.length;
 
     // Centros interpolados de cabeza a cola.
