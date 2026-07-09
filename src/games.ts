@@ -12,6 +12,10 @@ export interface GameEntry {
   category: string;
   /** Orden en la landing (menor primero). Sin valor va al final, alfabetico por titulo. */
   order?: number;
+  /** Fecha en que se agrego el juego (ISO `YYYY-MM-DD`). Ordena el modo "Nuevos"
+   * de la landing, que es el orden por defecto. Obligatorio en juegos nuevos:
+   * `order` es curado a mano y no refleja cuando entro cada juego. */
+  added: string;
   /** Ocultar del roster sin borrar la entrada (landing y salas). El juego sigue en el repo. */
   hidden?: boolean;
   /** Excluir solo del modo sala (selección, votación, random y picker del host),

@@ -88,8 +88,23 @@ nameInput.addEventListener("keydown", (e) => {
 
 // ---------- Filtros por categoria ----------
 
+// La categoria elegida se recuerda entre visitas (igual que el orden). Se valida
+// contra las categorias que existen hoy: si la guardada ya no esta (el juego que
+// la traia se saco del roster), cae a "Todos".
 const categories = ["Todos", ...new Set(games.map((g) => g.category))];
-let activeCategory = "Todos";
+const CATEGORY_KEY = "mg:category";
+
+function readCategory(): string {
+  try {
+    const v = localStorage.getItem(CATEGORY_KEY);
+    if (v && categories.includes(v)) return v;
+  } catch {
+    // ignore
+  }
+  return "Todos";
+}
+
+let activeCategory = readCategory();
 
 const filters = document.createElement("div");
 filters.className = "filters";
@@ -100,6 +115,11 @@ for (const cat of categories) {
   btn.textContent = cat;
   btn.addEventListener("click", () => {
     activeCategory = cat;
+    try {
+      localStorage.setItem(CATEGORY_KEY, cat);
+    } catch {
+      // ignore
+    }
     filters.querySelectorAll(".filters__pill").forEach((b) => b.classList.remove("is-active"));
     btn.classList.add("is-active");
     applyFilters();
@@ -110,14 +130,15 @@ for (const cat of categories) {
 // ---------- Control de orden ----------
 
 // Orden de las cards, elegible desde el control de la barra de filtros:
-//   - "popular"  (default): mas jugados primero (conteo de partidas).
-//   - "featured": el orden manual por `order` de cada meta.ts.
-//   - "alpha":    alfabetico por titulo.
+//   - "recent" (default): ultimos agregados primero, por la fecha `added` de cada meta.ts.
+//   - "popular": mas jugados primero (conteo de partidas).
+//   - "alpha":   alfabetico por titulo.
 // El modo "popular" arranca con el conteo cacheado (sin parpadeo) y se refresca
 // desde Supabase al terminar de montar. El sort es estable, asi que los empates
-// conservan el orden base de games.ts (por `order`).
+// conservan el orden base de games.ts (por `order`): los juegos que entraron el
+// mismo dia quedan en el orden curado.
 const cardById = new Map<string, HTMLElement>();
-type SortMode = "popular" | "featured" | "alpha";
+type SortMode = "recent" | "popular" | "alpha";
 const SORT_KEY = "mg:sort";
 let sortMode: SortMode = readSortMode();
 let playCounts = cachedPlayCounts();
@@ -132,11 +153,11 @@ sortLabel.textContent = "Ordenar";
 // Dropdown propio (no un <select> nativo, cuya lista la dibuja el SO y no se
 // puede tematizar): un boton disparador + un menu con el estilo del sitio.
 const SORT_LABELS: Record<SortMode, string> = {
+  recent: "Nuevos",
   popular: "Populares",
-  featured: "Destacados",
   alpha: "A-Z",
 };
-const SORT_ORDER: SortMode[] = ["popular", "featured", "alpha"];
+const SORT_ORDER: SortMode[] = ["recent", "popular", "alpha"];
 
 const sortDropdown = document.createElement("div");
 sortDropdown.className = "sort__dropdown";
@@ -231,22 +252,26 @@ grid.className = "grid";
 
 function readSortMode(): SortMode {
   try {
+    // El modo "featured" (orden manual) fue reemplazado por "recent"; un valor
+    // guardado de una version anterior cae al default.
     const v = localStorage.getItem(SORT_KEY);
-    if (v === "popular" || v === "featured" || v === "alpha") return v;
+    if (v === "recent" || v === "popular" || v === "alpha") return v;
   } catch {
     // ignore
   }
-  return "popular";
+  return "recent";
 }
 
 function orderedGames(): GameEntry[] {
   if (sortMode === "alpha") {
     return [...games].sort((a, b) => a.title.localeCompare(b.title));
   }
-  if (sortMode === "featured") {
-    return [...games]; // games.ts ya viene ordenado por `order`
+  if (sortMode === "popular") {
+    return [...games].sort((a, b) => (playCounts[b.id] ?? 0) - (playCounts[a.id] ?? 0));
   }
-  return [...games].sort((a, b) => (playCounts[b.id] ?? 0) - (playCounts[a.id] ?? 0));
+  // games.ts ya viene ordenado por `order`, y el sort es estable: los juegos
+  // agregados el mismo dia conservan ese orden curado.
+  return [...games].sort((a, b) => b.added.localeCompare(a.added));
 }
 
 orderedGames().forEach((game, i) => {
@@ -379,6 +404,10 @@ function applyFilters(): void {
 }
 
 searchInput.addEventListener("input", applyFilters);
+
+// Las cards se montan todas visibles; si la categoria viene guardada de una
+// visita anterior hay que ocultar las que no entran.
+applyFilters();
 
 // ---------- Footer ----------
 

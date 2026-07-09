@@ -8,6 +8,12 @@ export type RoomStatus =
   | "time_voting"
   | "finished";
 
+/**
+ * Visibilidad de la sala. Las publicas se listan en /rooms/ y cualquiera puede
+ * entrar; a las privadas se entra solo con el codigo o el link.
+ */
+export type RoomVisibility = "public" | "private";
+
 /** Ajustes elegidos por el host al crear la sala. */
 export interface RoomSettings {
   /** Cantidad total de rondas (si hay playlist, es playlist.length). */
@@ -28,12 +34,25 @@ export interface RoomRow {
   host: string;
   status: RoomStatus;
   settings: RoomSettings;
+  /** Opcional por compatibilidad con salas creadas antes de la columna. */
+  visibility?: RoomVisibility;
+  /** timestamptz ISO del ultimo heartbeat de algun cliente de la sala. */
+  last_active?: string;
   current_round: number;
   current_game: string | null;
   vote_options: string[] | null;
   /** timestamptz ISO del fin aproximado de la ronda o votacion en curso. */
   deadline: string | null;
   created_at: string;
+}
+
+/** Fila del listado de salas publicas abiertas que muestra /rooms/. */
+export interface PublicRoom {
+  code: string;
+  host: string;
+  /** Jugadores registrados (room_players), no presencia del canal. */
+  players: number;
+  settings: RoomSettings;
 }
 
 /** Fila de public.room_rounds: que juego salio en cada ronda. */
@@ -82,8 +101,25 @@ export function formatRoundTimeLimit(sec: number): string {
   return sec === NO_TIME_LIMIT ? "Sin límite" : `${sec / 60} min`;
 }
 export const DEFAULT_TOTAL_ROUNDS = 5;
-export const TOTAL_ROUNDS_OPTIONS = [3, 5, 7] as const;
+
+/**
+ * Cuantos juegos dura una partida de sala. El tope alto es holgado a proposito:
+ * la playlist no puede pasarse del roster (la grilla se bloquea en el tope), y
+ * sin playlist `pickVoteOptions` sortea con repeticion, asi que ninguna ronda
+ * puede quedarse sin candidatos.
+ */
+export const TOTAL_ROUNDS_OPTIONS = [3, 5, 7, 10, 15, 20] as const;
 
 /** Tope de jugadores por sala. Se rechaza a los jugadores nuevos al llegar a
  * este numero; los ya registrados siempre pueden reingresar (rejoin). */
 export const MAX_ROOM_PLAYERS = 8;
+
+/** Cada cuanto un cliente adentro de una sala le hace touch a last_active. */
+export const HEARTBEAT_MS = 15_000;
+
+/**
+ * Una sala sin heartbeat por mas de esto se considera muerta: no se lista y la
+ * purga la borra. Holgado respecto de HEARTBEAT_MS para tolerar pestanas
+ * dormidas, navegacion entre juegos y round-trips lentos.
+ */
+export const ROOM_STALE_MS = 60_000;

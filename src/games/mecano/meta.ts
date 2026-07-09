@@ -10,6 +10,7 @@ export const meta: GameEntry = {
   accent: "#a5b4fc",
   category: "Reflejos",
   order: 275,
+  added: "2026-07-06",
 };
 
 // Scoring is the default { direction: "higher" } (more PPM is better), so no
