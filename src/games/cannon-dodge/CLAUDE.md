@@ -114,9 +114,24 @@ real time. Two pieces make this work, mirroring `car-race`:
    passes a random seed, so each run differs.
 2. **Ephemeral position broadcast.** `DodgeChannel` streams our `{x, y, facing,
    alive}`; incoming snapshots fill a `remotes` map that `updateRemotes()` eases
-   toward its targets (and purges after `REMOTE_STALE_MS`). While dead we keep
-   emitting `alive:false` so our pirate lingers faded as a wreck. This is pure
-   Supabase broadcast — it does **not** use the Node game server.
+   toward its targets (and purges after `REMOTE_STALE_MS`, 6 s — long enough that
+   a network hiccup freezes a rival in place instead of deleting him). We broadcast
+   from the countdown on, so everyone is on screen before the first shot, and while
+   dead we keep emitting `alive:false` so our pirate lingers faded as a wreck. This
+   is pure Supabase broadcast — it does **not** use the Node game server.
+
+   **Gotcha — the channel dies and nobody notices.** `subscribe()` used to be
+   called with no status callback, so a `CHANNEL_ERROR` / `TIMED_OUT` / `CLOSED`
+   was silent: from then on nothing arrived, every remote went stale, and you
+   finished the round alone on the island (and your own `send()`s fell back to
+   `realtime-js`'s REST path — one HTTP POST per heartbeat — so the others lost
+   you too). `DodgeChannel` now tracks the status, gates `send()` on a joined
+   channel, and rebuilds it with backoff. What knocks the socket down is volume:
+   Realtime caps messages per second per channel (~100 by default) and a full room
+   is `players x (1000 / NET_SEND_MS)`. Hence `NET_SEND_MS` is 100 (not 90) and
+   `emitPos` drops to a `NET_IDLE_MS` keepalive when the pirate hasn't moved —
+   which matters now that the sunk ones stay watching instead of leaving. If you
+   ever raise the send rate, do the multiplication for 8 players first.
 
    **Gotcha — the heartbeat runs off `setInterval`, not the animation frame.**
    `netTimer` fires `heartbeat()` every `NET_SEND_MS`. This is deliberate:
@@ -125,7 +140,7 @@ real time. Two pieces make this work, mirroring `car-race`:
    *still* player stop broadcasting and vanish from everyone else after the stale
    timeout (Neon Drift never hit this because its cars are always moving and
    testing is usually single-window). A background tab still fires `setInterval`
-   ~1x/s, which stays inside `REMOTE_STALE_MS` (2.5 s). Keep the heartbeat off the
+   ~1x/s, which stays inside `REMOTE_STALE_MS` (6 s). Keep the heartbeat off the
    frame loop.
 
 **Bandana colours.** Every player gets a distinct bandana colour by *seat order*
