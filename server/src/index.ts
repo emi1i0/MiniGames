@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { fragmentCount, wordCount } from "./dictionary.js";
+import { fragmentCount, initialCount, wordCount } from "./dictionary.js";
 import { registerWordBomb } from "./games/wordbomb.js";
+import { registerWordChain } from "./games/wordchain.js";
 import { registerPong } from "./games/pong.js";
 
 /**
@@ -21,7 +22,14 @@ const ORIGINS = process.env.ALLOWED_ORIGINS?.split(",").map((s) => s.trim()).fil
 const httpServer = createServer((req, res) => {
   if (req.url === "/health" || req.url === "/") {
     res.writeHead(200, { "content-type": "application/json" });
-    res.end(JSON.stringify({ ok: true, words: wordCount(), fragments: fragmentCount() }));
+    res.end(
+      JSON.stringify({
+        ok: true,
+        words: wordCount(),
+        fragments: fragmentCount(),
+        initials: initialCount(),
+      }),
+    );
     return;
   }
   res.writeHead(404);
@@ -33,10 +41,12 @@ const io = new Server(httpServer, {
 });
 
 registerWordBomb(io);
+registerWordChain(io);
 registerPong(io);
 
 httpServer.listen(PORT, () => {
   console.log(
-    `[game-server] escuchando en :${PORT} | diccionario ${wordCount()} palabras, ${fragmentCount()} fragmentos`,
+    `[game-server] escuchando en :${PORT} | diccionario ${wordCount()} palabras, ` +
+      `${fragmentCount()} fragmentos, ${initialCount()} letras iniciales`,
   );
 });

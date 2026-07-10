@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Hole in None and Cannon Dodge), each independently playable — except Bomba Palabra, which is **rooms-only** (needs a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Hole in None and Cannon Dodge), each independently playable — except Bomba Palabra and Cadena de Palabras, which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
 
 ## Conventions (must follow)
 
@@ -43,8 +43,9 @@ Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rh
 6. Implement the mandatory Enter-to-start 3 / 2 / 1 / YA countdown (see "Shared UX pattern" below).
 7. Wire the global ranking (see "Global rankings" below): if the game's scoring is non-default, add `export const scoring: GameScoring` to its `meta.ts` (omit it for a plain `{ direction: "higher" }` board); then call `hud.showRanking(...)` on game over.
 8. Wire the multiplayer room mode (see "Salas (multiplayer rooms)" below): `initRoomMode(<id>, { getScore })` in the constructor, block the restart input on game over when `this.room` is set, and call `this.room.reportScore(score)` instead of `hud.showRanking(...)`.
-9. Run `npm run build` to confirm the new entry is discovered.
-10. Add the game and its author/credits to the games table in the root-level [README.md](file:///c:/ReposGit/Game/README.md).
+9. If the game shows the other players live (streaming positions over its own broadcast channel), read "Canales efimeros de alta frecuencia" below **first** and copy `cannon-dodge`'s `DodgeChannel.ts`: there is a message-per-second budget you will blow with a full room, and a bare `subscribe()` fails silently.
+10. Run `npm run build` to confirm the new entry is discovered.
+11. Add the game and its author/credits to the games table in the root-level [README.md](file:///c:/ReposGit/Game/README.md).
 
 Games are intentionally decoupled — no shared game-engine code between them. Don't introduce a shared abstraction across games unless a second game actually needs it. The lone exception is `src/shared/` (global rankings), which is deliberately cross-cutting infra, not gameplay logic.
 
@@ -98,6 +99,16 @@ Setup note: the rooms schema (including `room_match_state`) is `supabase/rooms.s
 
 Degradation matches the leaderboard: without credentials the landing button and `/rooms/` UI don't function and every game behaves exactly as before.
 
+### Canales efimeros de alta frecuencia (ver a los otros jugadores en vivo)
+
+Some room games stream each player's live position over their own **ephemeral broadcast channel** — no DB, no game server, one channel per room+round, separate from the `RoomChannel` so the high-frequency traffic doesn't mix with the room sync. Each game owns its copy (per the decoupling rule): `car-race`'s `RaceChannel`, `cannon-dodge`'s `DodgeChannel`, `rocket-arena`'s `ArenaChannel`, `typing-race`'s `TypingChannel`, `monopoly-mundial`'s `MonopolyChannel`. Copy `DodgeChannel.ts` when you add another one — it is the only one that gets the two rules below right.
+
+**1. Presupuesto de mensajes: Realtime tiene un tope y se pasa solo.** Supabase Realtime rate-limits broadcasts per channel (`max_events_per_second`, ~100 by default, a per-project setting). Do **not** assume the `realtime: { params: { eventsPerSecond: 40 } }` in `src/shared/supabase.ts` lifts it: the installed `realtime-js` doesn't even read that key (grep it in `node_modules`), and its comment about a 10 events/s client throttle is stale. The traffic in one of these channels is **`players x (1000 / NET_SEND_MS)`**, and a room holds up to `MAX_ROOM_PLAYERS` (8). So do the multiplication for 8 players before you pick a send rate: at 90 ms that is ~88 msg/s and the socket starts getting dropped mid-round; at 100 ms it is 80. **`NET_SEND_MS >= 100` (10/s) is the house limit** for a per-player broadcast, and it's what `car-race` and `cannon-dodge` use (`rocket-arena` sits at 80 ms, which is over budget for a full room — known debt, it's `hidden` anyway). Two things buy headroom without lowering the rate: send **only when the snapshot changed**, dropping to a ~1 s keepalive while a player is still or dead (`NET_IDLE_MS` in `cannon-dodge`; note that a dead player who stays watching keeps emitting), and round the payload numbers so identical frames compare equal.
+
+**2. `subscribe()` sin callback de estado es un bug.** A bare `channel.subscribe()` never tells you that the channel died (`CHANNEL_ERROR` / `TIMED_OUT` / `CLOSED`), and nothing re-subscribes it. The failure is silent and total: no snapshot ever arrives again, every remote goes stale and gets purged, and the player finishes the round alone thinking the others vanished. Worse, `RealtimeChannel.send()` on a channel that can't push **silently falls back to a REST POST per message**, so a game heartbeating at 10/s starts hammering the broadcast endpoint. So: pass the status callback, keep a `ready` flag, **gate `send()` on it**, and rebuild the channel with backoff when it drops (see `DodgeChannel.open` / `scheduleReopen`). Pair it with a generous `REMOTE_STALE_MS` (6 s, not 2.5) so a normal network hiccup freezes a rival in place instead of deleting him.
+
+Also: drive the heartbeat off `setInterval`, never off the `requestAnimationFrame` loop — browsers pause rAF in background tabs, so a still player would stop broadcasting and disappear for everyone else. `car-race`, `rocket-arena`, `typing-race` and `monopoly-mundial` still call `subscribe()` bare; they predate this and haven't been migrated.
+
 ## Game server (tiempo real / autoritativo)
 
 Servidor Node separado en `server/` (socket.io, deploy en Railway) para los
@@ -107,7 +118,8 @@ spoofeable. **Complementa** la infra de salas de Supabase, no la reemplaza:
 Supabase sigue siendo la fuente de verdad de lobby / marcador / rejoin; el server
 solo maneja el **estado en-ronda en memoria** y **no toca la DB**. Plan de fondo:
 `docs/server-realtime-plan.md`. **En uso: Bomba Palabra** (`word-bomb`, validacion
-por turnos) **y PONG** (`pong`, fisica de tiempo real / PvP 1v1).
+por turnos), **Cadena de Palabras** (`word-chain`, fork de Bomba con otra mecanica)
+**y PONG** (`pong`, fisica de tiempo real / PvP 1v1).
 
 Estructura de `server/` (paquete propio, aislado del build de Vite, con su propio
 `package.json` / `tsconfig.json` / `node_modules`, gitignoreado):
@@ -121,26 +133,47 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   `dispose`). Para agregar otro juego server-side se implementa un `RoomSim` y se
   llama `registerGame` en su propio namespace.
 - `src/protocol.ts` — tipos de mensajes (por juego: `wb:*` de Bomba Palabra,
-  `pg:*` de PONG). **Se duplican en el cliente** (p.ej.
-  `src/games/word-bomb/game/WordBombTransport.ts` y
+  `wc:*` de Cadena de Palabras, `pg:*` de PONG). **Se duplican en el cliente**
+  (p.ej. `src/games/word-bomb/game/WordBombTransport.ts`,
+  `src/games/word-chain/game/WordChainTransport.ts` y
   `src/games/pong/game/PongProtocol.ts`) por la regla de decoupling (no se
   comparte modulo entre `src/` y `server/`); si cambia el protocolo, tocar ambos
   lados.
 - `src/dictionary.ts` — diccionario de espanol embebido
-  (`an-array-of-spanish-words`, ~636k palabras) mas `src/extra-words.ts` para
-  Bomba Palabra: normaliza (conserva la ñ, saca acentos) y precomputa los
-  fragmentos jugables. Vive solo en el server (validacion no spoofeable, sin peso
-  en el bundle del front).
+  (`an-array-of-spanish-words`, ~637k palabras) mas `src/extra-words.ts`,
+  compartido por los dos juegos de palabras: normaliza (conserva la ñ, saca
+  acentos) y precomputa **los fragmentos jugables** (`randomFragment`, para Bomba
+  Palabra: subcadenas de 2-3 letras con >= 500 palabras) y **las letras iniciales
+  sorteables** (`randomInitial` / `hasInitial`, para Cadena de Palabras: letras con
+  >= 1000 palabras, o sea 22 — quedan afuera x, ñ e y). Vive solo en el server
+  (validacion no spoofeable, sin peso en el bundle del front).
 - `src/extra-words.ts` — array `EXTRA_WORDS` editable a mano: palabras que el
   diccionario base no trae (jerga, regionalismos). Se suman al set igual que el
   resto; requiere redeploy del server. Para agregar palabras se toca solo este
   archivo.
+- `src/places.ts` — array `PLACES`: paises, capitales, provincias argentinas y
+  ciudades conocidas (~600). El corpus base es de lexico comun y aceptaba los
+  toponimos que **por casualidad** son palabra comun (`chile` el aji, `lima` la
+  fruta, `salta` y `quito` verbos, `argentina` adjetivo) y rechazaba el resto
+  (`mexico`, `uruguay`, `madrid`), lo que en la mesa es indistinguible de un bug.
+  Los nombres compuestos se **concatenan** al normalizar (`buenos aires` ->
+  `buenosaires`), asi que se aciertan con o sin espacio. Nada de `ã` ni letras que
+  la normalizacion borre (dejarian la palabra mutilada). Se ingiere junto con
+  `EXTRA_WORDS`; requiere redeploy.
 - `src/games/wordbomb.ts` — `WordBombSim`: turnos, mecha (deadline absoluto),
   vidas, palabras usadas, validacion y orden de eliminacion. Difunde `wb:state`
   en cada cambio; el cliente anima la mecha localmente entre snapshots. Ademas
   retransmite las **reacciones** (`wb:emote`): puro relay validado contra un
   allowlist de ids, con cooldown por jugador, que **no** viaja en `wb:state` (es
   efimera). Ver el `CLAUDE.md` de `word-bomb` para el detalle del flujo y el tuning.
+- `src/games/wordchain.ts` — `WordChainSim`: **fork de Bomba Palabra** con otra
+  mecanica. El reto es una **letra** y la palabra tiene que **empezar** con ella; su
+  ultima letra es el reto del siguiente ("tronco" -> "o"). **Una sola vida**: el
+  timeout elimina en el acto, y el que sigue hereda la misma letra (la cadena no
+  avanzo). El reloj arranca en 12s y se acorta 200ms por eslabon, con piso de 5s.
+  Las letras pobres se juegan igual (`fax` -> te toca la X); solo se sortea otra si
+  la letra no tiene **ninguna** palabra detras. Difunde `wc:state`; mismas reacciones
+  y tipeo que Bomba. Ver el `CLAUDE.md` de `word-chain`.
 - `src/games/pong.ts` — `PongSim`: empareja la sala de a dos (un `Match` por par;
   el impar juega vs IA del server), corre la fisica de la pelota / colisiones /
   rampa / puntaje a ~30 fps y emite `pg:state` a cada jugador con su lado. La
@@ -152,9 +185,10 @@ Cliente: env `VITE_GAME_SERVER_URL` (documentada en `.env.example`). El juego
 carga `socket.io-client` con **import dinamico** (no pesa en los juegos que no lo
 usan). **Degradacion:** depende del juego. PONG degrada con gracia: sin
 `VITE_GAME_SERVER_URL` la sala cae a un partido local vs IA por jugador (y solo
-sigue siendo 1 jugador en la landing). Bomba Palabra **no** puede: existe por el
-server, asi que sin `VITE_GAME_SERVER_URL` muestra "no disponible" (excepcion
-deliberada y documentada a la regla de degradacion del repo).
+sigue siendo 1 jugador en la landing). Bomba Palabra y Cadena de Palabras **no**
+pueden: existen por el server (el diccionario vive ahi), asi que sin
+`VITE_GAME_SERVER_URL` muestran "no disponible" (excepcion deliberada y
+documentada a la regla de degradacion del repo).
 
 Comandos del server (dentro de `server/`): `npm run dev` (tsx watch),
 `npm run build` (tsc -> `dist/`), `npm start` (`node dist/index.js`). Deploy

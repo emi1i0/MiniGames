@@ -3,6 +3,7 @@ import {
   hashStr,
   MAX_DT,
   MUZZLE_OFFSET,
+  NET_IDLE_MS,
   NET_SEND_MS,
   REMOTE_STALE_MS,
   VIEW_SIZE,
@@ -74,6 +75,9 @@ export class Game {
    * so a still or unfocused player keeps broadcasting — rAF throttles/pauses in
    * background tabs, which made idle pirates vanish for everyone else. */
   private netTimer: ReturnType<typeof setInterval> | null = null;
+  /** Last snapshot actually broadcast, to skip re-sending an unchanged one. */
+  private lastSent: DodgePayload | null = null;
+  private lastSentAt = 0;
 
   private state: State = "ready";
   /** Survival time in seconds — this is the score. */
@@ -174,22 +178,40 @@ export class Game {
     r.lastAt = Date.now();
   }
 
-  /** Timer-driven heartbeat: broadcasts our position while playing, and keeps
-   * emitting the wreck while dead so others still see where we went down. */
+  /** Timer-driven heartbeat: broadcasts our position from the countdown on (so
+   * everyone is on screen before the first shot), and keeps emitting the wreck
+   * while dead so others still see where we went down. */
   private heartbeat(): void {
-    if (this.state === "playing") this.emitPos(true);
+    if (this.state === "countdown" || this.state === "playing") this.emitPos(true);
     else if (this.state === "dead") this.emitPos(false);
   }
 
   private emitPos(alive: boolean): void {
     if (!this.channel) return;
-    this.channel.send({
+    const payload: DodgePayload = {
       p: this.me,
       x: Math.round(this.player.x),
       y: Math.round(this.player.y),
       a: Number(this.player.facing.toFixed(3)),
       alive,
-    });
+    };
+
+    // Un pirata quieto (o hundido) no necesita repetir el mismo snapshot 10
+    // veces por segundo: baja a un keepalive. Con la sala llena esto es la
+    // diferencia entre rozar el tope de mensajes/s del canal y no rozarlo.
+    const now = Date.now();
+    const last = this.lastSent;
+    const same =
+      last !== null &&
+      last.x === payload.x &&
+      last.y === payload.y &&
+      last.a === payload.a &&
+      last.alive === payload.alive;
+    if (same && now - this.lastSentAt < NET_IDLE_MS) return;
+
+    this.lastSent = payload;
+    this.lastSentAt = now;
+    this.channel.send(payload);
   }
 
   /** Eases the remote pirates toward their latest snapshot; purges stale ones. */
@@ -218,6 +240,7 @@ export class Game {
     const seed = this.room ? (this.roomSeed || (hashStr(`${this.room.code}:${this.room.round()}`) >>> 0)) : (Math.random() * 2 ** 31) >>> 0;
     this.field.reset(seed);
     this.remotes.clear();
+    this.lastSent = null;
     this.particles.clear();
     this.state = "countdown";
     this.countdownTime = 0;

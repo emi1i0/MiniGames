@@ -77,6 +77,76 @@ export interface WbServerToClient {
   "wb:gameover": (msg: WbGameover) => void;
 }
 
+/* ==================== CADENA DE PALABRAS (namespace /wordchain) ==================== */
+
+/**
+ * Contrato de mensajes socket.io de Cadena de Palabras (namespace `/wordchain`).
+ *
+ * Fork de Bomba Palabra con otra mecanica: el reto es una LETRA (no un fragmento) y
+ * la palabra tiene que EMPEZAR con ella; su ultima letra pasa a ser el reto del
+ * siguiente. Una sola vida: si se te acaba el reloj quedas eliminado en el acto.
+ * Server autoritativo igual que Bomba (turno, reloj, validacion contra el diccionario)
+ * y misma confianza spoofeable; no escribe en Supabase.
+ */
+
+export interface WcPlayerView {
+  nickname: string;
+  /** Sigue en pie. Con una sola vida, `false` = eliminado. */
+  alive: boolean;
+  connected: boolean;
+  /** Cuantos eslabones aporto (palabras aceptadas) — se muestra como su racha. */
+  links: number;
+}
+
+export type WcPhase = "waiting" | "playing" | "over";
+
+export interface WcState {
+  phase: WcPhase;
+  turn: string | null;
+  /** Letra con la que tiene que empezar la palabra del jugador de turno. */
+  letter: string | null;
+  /** Fin del reloj del turno en epoch ms, o null. */
+  deadline: number | null;
+  /** Ms restantes al momento del broadcast; el cliente los ancla a performance.now()
+   *  para animar el anillo sin drift de reloj (ver Bomba Palabra). */
+  clockMs: number | null;
+  /** Duracion total del reloj de este turno, para la fraccion del anillo. */
+  clockTotalMs: number | null;
+  players: WcPlayerView[];
+  /** Largo de la cadena forjada (palabras aceptadas en la partida). */
+  chainLength: number;
+  /** Ultima palabra aceptada, para sellarla una vez en los demas clientes. */
+  lastAccepted: { player: string; word: string; seq: number } | null;
+}
+
+/** Motivo del rechazo (feedback privado al que lo mando). */
+export type WcRejectReason = "not-a-word" | "wrong-initial" | "already-used" | "not-your-turn";
+
+/** Reacciones: mismo set cerrado que Bomba Palabra (ids, nunca glifos). */
+export type WcEmoteId = "risa" | "sorpresa" | "enojo" | "burla" | "llanto";
+
+export interface WcGameover {
+  /** Puesto por jugador: 1 = ganador (ultimo en pie). */
+  ranking: { nickname: string; place: number }[];
+}
+
+/** Cliente -> Server. */
+export interface WcClientToServer {
+  "wc:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  "wc:submit": (msg: { word: string }) => void;
+  "wc:typing": (msg: { text: string }) => void;
+  "wc:emote": (msg: { emote: WcEmoteId }) => void;
+}
+
+/** Server -> Cliente. */
+export interface WcServerToClient {
+  "wc:state": (state: WcState) => void;
+  "wc:invalid": (msg: { reason: WcRejectReason }) => void;
+  "wc:typing": (msg: { player: string; text: string }) => void;
+  "wc:emote": (msg: { player: string; emote: WcEmoteId }) => void;
+  "wc:gameover": (msg: WcGameover) => void;
+}
+
 /* ============================ PONG (namespace /pong) ============================ */
 
 /**

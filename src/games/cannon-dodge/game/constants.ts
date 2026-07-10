@@ -57,10 +57,18 @@ export const TELEGRAPH_START = 1.1;
 export const TELEGRAPH_MIN = 0.52;
 
 // --- Room mode: live view of the other players (Neon Drift model) ---
-/** How often each client broadcasts its pirate position (ms) — ~11/s. */
-export const NET_SEND_MS = 90;
-/** A remote pirate that hasn't updated in this long (ms) is dropped. */
-export const REMOTE_STALE_MS = 2500;
+/** How often each client broadcasts its pirate position (ms) — 10/s. Kept at or
+ * below 10/s because a full room (8 pirates) multiplies it against the Realtime
+ * server's per-second message cap for the channel, which drops the socket. */
+export const NET_SEND_MS = 100;
+/** A still pirate re-sends at most this often (ms): a keepalive, so an idle or
+ * sunk player doesn't burn the channel's budget at the full rate. Must stay well
+ * under REMOTE_STALE_MS or the others would purge him. */
+export const NET_IDLE_MS = 1000;
+/** A remote pirate that hasn't updated in this long (ms) is dropped. Generous on
+ * purpose: a couple of seconds of network hiccup should not make a rival vanish
+ * — he just holds his last position until the next snapshot arrives. */
+export const REMOTE_STALE_MS = 6000;
 
 /** Bandana palette — one distinct colour per player (by seat order). */
 export const BANDANA_COLORS = [
