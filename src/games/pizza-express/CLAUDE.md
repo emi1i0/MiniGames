@@ -6,12 +6,15 @@ suburb ("Cheesetown"). You ride a red delivery scooter down an endless street:
 pizzas at roadside mailboxes** that have a pending order (marked by a bright
 downward **arrow**). A throw is delivered to the customer **on the side of the
 street the scooter is on**; a throw with no customer in range on that side is an
-**errant pizza** that costs you a token. Deliveries score points with a **combo
-multiplier**. During the 10-second tutorial a **shield** (shown top-left) cushions
-errant throws; once the tutorial ends the shield is gone and you run on **3 pizza
-tokens** — waste all three and the run ends. (Letting a customer pass unserved only
-breaks the combo, it costs no token.) It is a single infinite level whose speed,
-hazard density and customer pace
+**errant pizza** that costs you a token. Throws only connect inside a **timed
+window** (`THROW_MIN_Z`..`THROW_RANGE_Z` ahead): too early is out of range and
+too close is too late to lob — both are errant. Deliveries score points with a
+**combo multiplier**. During the 10-second tutorial a **shield** (shown top-left)
+cushions errant throws; once the tutorial ends the shield is gone and you run on
+two token pools (both shown top-left, spent ones greyed): **3 pizza tokens** for
+errant throws and **5 mailbox tokens** for customers you let pass unserved (each
+skip also breaks the combo) — empty either pool and the run ends. It is a single
+infinite level whose speed, hazard density and customer pace
 **ramp fast** after a 10-second tutorial. It is **PC-oriented** (keyboard; no
 touch button). Solo score is total points (higher is better, default board). Art
 direction: `DESIGN.md` ("Golden Hour Delivery"), based on the game's cover.
@@ -76,7 +79,9 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
   pizza is in flight toward it, so it is **not** counted as a miss mid-flight. The
   field spawns them along the verges, tracks pending ones, reports **misses**
   (passed unserved), and exposes `nearestPendingTarget(side)` — the closest
-  pending, unreserved customer **on that side** in range, or null (an errant throw).
+  pending, unreserved customer **on that side** inside the timed throw window
+  `[THROW_MIN_Z, THROW_RANGE_Z]` ahead, or null (an errant throw — including at a
+  box that is still pending but already too close to lob at).
 - `game/Pizza.ts` — `PizzaThrower`: a pool of pizzas that **lob on a parabola**
   from the scooter toward the assigned pending mailbox (**homing** on the moving
   box), delivering on arrival via an `onDeliver` callback. A throw with no valid
@@ -87,7 +92,8 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
   pointer drag, plus **throw** edge-events from Space/W/Up/J/K and a quick tap on
   the canvas (a tap = throw, a drag = steer).
 - `game/Hud.ts` — DOM overlay: score + **combo** + best, the **miss-token strip**
-  (a cool inline-SVG shield + 3 warm pizza tokens, spent ones greyed), the tutorial
+  (a cool inline-SVG shield + 3 warm pizza tokens + 5 mailbox tokens behind a
+  divider, spent ones greyed), the tutorial
   **thought bubble** (above the character, with a down-tail), start/game-over
   screens (two titles: crash vs "perdiste muchos pedidos"), countdown label, and
   the leaderboard panel. No throw button (PC-oriented).
@@ -109,8 +115,8 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
   markers, sun, sparks).
 - `game/dotTexture.ts` — cached soft round sprite for the particles.
 - `game/constants.ts` — **all tunable values** (road/field, speeds, difficulty
-  ramp, `TUTORIAL_SECONDS`, `MISS_PIZZAS`, obstacle pacing + gap, mailbox pacing,
-  throwing, scoring, palette). Tune here first.
+  ramp, `TUTORIAL_SECONDS`, `MISS_PIZZAS`, `MISS_CUSTOMERS`, obstacle pacing +
+  gap, mailbox pacing, throwing, scoring, palette). Tune here first.
 
 ## Core loop
 
@@ -118,10 +124,14 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
   run (instant death, like Space Rush / Cannon Dodge).
 - **Deliver:** press throw (Space / W / ↑, or a canvas tap) and a pizza auto-lobs
   to the closest pending mailbox **on the side the scooter is on** (`scooter.x`
-  sign) within `THROW_RANGE_Z` ahead. Delivery = `DELIVERY_BASE_POINTS × combo`;
-  the combo climbs (capped at `COMBO_MAX`) with each delivery. Throw has a
-  `THROW_COOLDOWN`. So positioning matters: to serve a left customer, be on the
-  left half — this is what the second tutorial hint teaches.
+  sign) inside the **timed window** `[THROW_MIN_Z, THROW_RANGE_Z]` ahead — beyond
+  it is out of range and closer than `THROW_MIN_Z` is too late to lob, so each
+  delivery is an exact timing call (the window used to be 0.5..18, which let you
+  hold the throw until fully alongside and never miss). Delivery =
+  `DELIVERY_BASE_POINTS × combo`; the combo climbs (capped at `COMBO_MAX`) with
+  each delivery. Throw has a `THROW_COOLDOWN`. So positioning matters: to serve a
+  left customer, be on the left half — this is what the second tutorial hint
+  teaches.
 - **Errant throw = the token cost.** A throw with **no deliverable customer on the
   scooter's side in range** is wasted: it **resets the combo to 0 and spends a
   token** (decided at throw time in `handleThrow` → `onErrantPizza`, so spamming is
@@ -129,9 +139,13 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
   absorbs the first errant throw and **disappears when the tutorial ends**
   (`updateTutorial`); errant throws are otherwise **free during the tutorial**. In
   the real game each errant throw costs a pizza (`pizzasLeft`, from `MISS_PIZZAS`)
-  and running out ends the run (game over, "misses" reason) — the second failure
-  mode besides crashing. **A customer that passes unserved only breaks the combo**
-  (`onCustomerMissed`), no token.
+  and running out ends the run (game over, "misses" reason).
+- **Skipped customer = the mailbox cost.** A customer that passes unserved
+  (`onCustomerMissed`) breaks the combo and, after the tutorial, also spends one
+  of the **5 mailbox tokens** (`customersLeft`, from `MISS_CUSTOMERS`); an empty
+  pool ends the run just like wasting the pizzas does (it used to cost nothing
+  but the combo, which made skipping customers free). So besides crashing there
+  are two miss-based failure modes, one per pool.
 - **Tutorial (first `TUTORIAL_SECONDS`):** a gentle intro — **no lethal
   obstacles**, two thought-bubble hints (throw controls, then "position yourself on
   the side you want to throw to"), and errant throws are **free** (only the shield
@@ -169,9 +183,12 @@ the game visibly steps up, reaching its hardest values at `DIFFICULTY_RAMP_SECON
 and mailbox spacing. The travel **speed** ramps continuously (`BASE_SPEED →
 MAX_SPEED`) off the same `playT`, and is held at `BASE_SPEED` during the tutorial.
 
-**Throwing is a short lob, not a snipe.** `THROW_RANGE_Z` is deliberately short so
-you deliver as a customer comes alongside (Paperboy timing), and the pizza homes
-on the mailbox's *current* position each frame so it lands even though the box is
+**Throwing is a timed lob, not a snipe.** The throw window is bounded on both
+ends: `THROW_RANGE_Z` is deliberately short so you deliver as a customer
+approaches (Paperboy timing), and `THROW_MIN_Z` cuts off the last stretch so
+holding the throw until the box is alongside no longer works — the drop must be
+timed inside the band. The pizza homes on the mailbox's *current* position each
+frame so a throw made inside the window always lands even though the box is
 moving toward you.
 
 **Delivery vs errant is decided at throw time.** `handleThrow` picks the target on

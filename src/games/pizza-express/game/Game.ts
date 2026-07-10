@@ -23,6 +23,7 @@ import {
   DIFFICULTY_RAMP_SECONDS,
   TUTORIAL_SECONDS,
   MISS_PIZZAS,
+  MISS_CUSTOMERS,
   THROW_COOLDOWN,
   DELIVERY_BASE_POINTS,
   COMBO_MAX,
@@ -75,6 +76,7 @@ export class Game {
   private throwCooldown = 0;
   private shieldActive = true;
   private pizzasLeft = MISS_PIZZAS;
+  private customersLeft = MISS_CUSTOMERS;
   private crashed = false;
   private bubbleText: string | null = null;
   private countdownTime = 0;
@@ -172,11 +174,17 @@ export class Game {
     this.particles.burst(p.x, p.y + 0.2, p.z, COLOR_CHEESE, 22, 3.2, 3.4);
   }
 
-  /** A customer passed by unserved: just lose the combo. No token cost — only
-   *  errant throws spend pizzas. */
-  private onCustomerMissed(): void {
+  /** A customer passed by unserved: break the combo and (after the tutorial)
+   *  spend one of the MISS_CUSTOMERS mailbox tokens — skipping customers ends
+   *  the run once the pool is gone, same as wasting pizzas does. */
+  private onCustomerMissed(count: number): void {
     this.combo = 0;
     this.hud.setCombo(0);
+    if (this.elapsed < TUTORIAL_SECONDS) return; // learning window: skips are free
+    SoundEffects.playMiss();
+    this.customersLeft = Math.max(0, this.customersLeft - count);
+    this.hud.setTokens(this.shieldActive, this.pizzasLeft, this.customersLeft);
+    if (this.customersLeft <= 0) this.endGame(false);
   }
 
   /** A thrown pizza that didn't land on a customer (wrong side / no customer in
@@ -192,12 +200,12 @@ export class Game {
     } else if (this.elapsed >= TUTORIAL_SECONDS) {
       this.pizzasLeft = Math.max(0, this.pizzasLeft - 1);
       if (this.pizzasLeft <= 0) {
-        this.hud.setTokens(this.shieldActive, this.pizzasLeft);
+        this.hud.setTokens(this.shieldActive, this.pizzasLeft, this.customersLeft);
         this.endGame(false);
         return;
       }
     }
-    this.hud.setTokens(this.shieldActive, this.pizzasLeft);
+    this.hud.setTokens(this.shieldActive, this.pizzasLeft, this.customersLeft);
   }
 
   private beginCountdown(): void {
@@ -212,6 +220,7 @@ export class Game {
     this.combo = 0;
     this.shieldActive = true;
     this.pizzasLeft = MISS_PIZZAS;
+    this.customersLeft = MISS_CUSTOMERS;
     this.crashed = false;
     SoundEffects.stopEngine(); // safety: room-mode rounds can restart mid-run
     this.state = "countdown";
@@ -231,11 +240,12 @@ export class Game {
     this.throwCooldown = 0;
     this.shieldActive = true;
     this.pizzasLeft = MISS_PIZZAS;
+    this.customersLeft = MISS_CUSTOMERS;
     this.bubbleText = null;
     this.obstacles.reset(); // clean road for the tutorial window
     this.hud.setScore(0);
     this.hud.setCombo(0);
-    this.hud.setTokens(true, MISS_PIZZAS);
+    this.hud.setTokens(true, MISS_PIZZAS, MISS_CUSTOMERS);
     this.hud.showTokens(true);
     this.hud.hide();
     this.hud.showCountdown(null);
@@ -291,7 +301,7 @@ export class Game {
     // ends, so the real game runs on the 3 pizza tokens alone.
     if (this.elapsed >= TUTORIAL_SECONDS && this.shieldActive) {
       this.shieldActive = false;
-      this.hud.setTokens(false, this.pizzasLeft);
+      this.hud.setTokens(false, this.pizzasLeft, this.customersLeft);
     }
     let text: string | null = null;
     if (this.elapsed < 5) text = "W / ↑ / Espacio para lanzar la pizza";
@@ -322,7 +332,7 @@ export class Game {
       this.street.scroll(dz, dt);
 
       const missed = this.mailboxes.update(dt, dz, d);
-      if (missed > 0) this.onCustomerMissed();
+      if (missed > 0) this.onCustomerMissed(missed);
       this.thrower.update(dt);
 
       // No lethal obstacles during the tutorial (safe learning window).

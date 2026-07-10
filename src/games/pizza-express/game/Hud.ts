@@ -4,6 +4,8 @@ import { LeaderboardPanel } from "../../../shared/LeaderboardPanel";
 // the one-time presentation shield reads apart from the miss pizzas).
 const PIZZA_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 22 20a1.6 1.6 0 0 1-1.9 2.3L12 20 3.9 22.3A1.6 1.6 0 0 1 2 20Z" fill="#f2b134" stroke="#8a5a2b" stroke-width="1.6" stroke-linejoin="round"/><circle cx="9.5" cy="15.5" r="1.5" fill="#a8281c"/><circle cx="14" cy="17" r="1.4" fill="#a8281c"/><circle cx="12" cy="11.5" r="1.3" fill="#a8281c"/></svg>`;
 const SHIELD_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 20 5v6c0 5-3.4 8.7-8 11-4.6-2.3-8-6-8-11V5Z" fill="#6fbfe8" stroke="#2c6f9e" stroke-width="1.6" stroke-linejoin="round"/><path d="M8.5 12l2.4 2.4 4.6-4.8" fill="none" stroke="#effaff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// A little mailbox token (skipped-customer lives): arched box on a post, red flag up.
+const MAILBOX_SVG = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="10.8" y="14" width="2.4" height="8" fill="#8a5a2b"/><path d="M4 15v-5.5C4 6.5 6.5 4 9.5 4h5C17.5 4 20 6.5 20 9.5V15Z" fill="#f2e4c4" stroke="#8a5a2b" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="1.7" fill="#d83a2b"/><path d="M18 4.5V1.5h3.6v2.6H18" fill="#d83a2b"/><path d="M18 1.5v6" stroke="#a8281c" stroke-width="1.6" stroke-linecap="round"/></svg>`;
 
 /** DOM overlay: live score + combo, best, the miss-token strip (shield + pizzas),
  *  the tutorial thought bubble, start / game-over screens, countdown and the
@@ -15,6 +17,7 @@ export class Hud {
   private readonly tokensEl: HTMLDivElement;
   private readonly shieldTok: HTMLSpanElement;
   private readonly pizzaToks: HTMLSpanElement[] = [];
+  private readonly mailToks: HTMLSpanElement[] = [];
   private readonly bubbleEl: HTMLDivElement;
   private readonly overlayEl: HTMLDivElement;
   private readonly titleEl: HTMLDivElement;
@@ -40,7 +43,8 @@ export class Hud {
 
     hud.append(this.scoreEl, this.comboEl, this.bestEl);
 
-    // Miss-token strip: shield + 3 pizzas.
+    // Miss-token strip: shield + 3 pizzas (errant throws) + 5 mailboxes
+    // (skipped customers).
     this.tokensEl = document.createElement("div");
     this.tokensEl.className = "tokens";
     this.shieldTok = document.createElement("span");
@@ -52,6 +56,13 @@ export class Hud {
       t.className = "token token--pizza";
       t.innerHTML = PIZZA_SVG;
       this.pizzaToks.push(t);
+      this.tokensEl.append(t);
+    }
+    for (let i = 0; i < 5; i++) {
+      const t = document.createElement("span");
+      t.className = i === 0 ? "token token--mail token--divide" : "token token--mail";
+      t.innerHTML = MAILBOX_SVG;
+      this.mailToks.push(t);
       this.tokensEl.append(t);
     }
 
@@ -111,11 +122,15 @@ export class Hud {
     this.bestEl.textContent = best > 0 ? `MEJOR: ${best}` : "";
   }
 
-  /** Shows the miss allowance: whether the shield is intact and pizzas remaining. */
-  setTokens(shieldActive: boolean, pizzasLeft: number): void {
+  /** Shows the miss allowances: the shield, pizzas (errant throws) remaining and
+   *  mailboxes (skippable customers) remaining. */
+  setTokens(shieldActive: boolean, pizzasLeft: number, customersLeft: number): void {
     this.shieldTok.classList.toggle("is-spent", !shieldActive);
     for (let i = 0; i < this.pizzaToks.length; i++) {
       this.pizzaToks[i].classList.toggle("is-spent", i >= pizzasLeft);
+    }
+    for (let i = 0; i < this.mailToks.length; i++) {
+      this.mailToks[i].classList.toggle("is-spent", i >= customersLeft);
     }
   }
 

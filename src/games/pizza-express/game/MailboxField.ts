@@ -8,6 +8,7 @@ import {
   MAILBOX_SPACING_MIN,
   MAILBOX_MISS_Z,
   THROW_RANGE_Z,
+  THROW_MIN_Z,
   SCOOTER_Z,
 } from "./constants";
 
@@ -70,14 +71,15 @@ export class MailboxField {
   }
 
   /** The best pending customer to auto-aim a thrown pizza at **on the given side**
-   *  of the street: the closest one still ahead of the scooter, within throwing
-   *  range and not already reserved by another pizza. Null if none — a throw to a
-   *  side with no such customer is "errant". */
+   *  of the street: the closest one inside the timed throw window
+   *  [THROW_MIN_Z, THROW_RANGE_Z] ahead and not already reserved by another
+   *  pizza. Null if none — a throw to a side with no such customer is "errant"
+   *  (including one at a box that is still pending but already too close). */
   nearestPendingTarget(side: -1 | 1): Mailbox | null {
     let best: Mailbox | null = null;
     for (const b of this.boxes) {
       if (!b.pending || b.reserved || b.side !== side) continue;
-      if (b.z > MAILBOX_MISS_Z || b.z < -THROW_RANGE_Z) continue;
+      if (b.z > -THROW_MIN_Z || b.z < -THROW_RANGE_Z) continue;
       if (!best || b.z > best.z) best = b; // greatest z = closest / most urgent
     }
     return best;

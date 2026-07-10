@@ -38,10 +38,13 @@ export const SPEED_RAMP_PER_SEC = 1.05; // linear climb of the speed cap over ti
 // hints, and the shield cushions misses so a new player can learn to throw.
 export const TUTORIAL_SECONDS = 10;
 
-// --- Miss allowance (customers passed undelivered) ---
-// You can lose this many pizza tokens before the run ends, plus a one-time
-// shield that absorbs the very first miss. Neither regenerates.
+// --- Miss allowances (neither pool regenerates; both only count post-tutorial) ---
+// Errant throws: you can waste this many pizzas before the run ends, plus a
+// one-time tutorial shield that absorbs the very first one.
 export const MISS_PIZZAS = 3;
+// Skipped customers: you can let this many mailboxes pass unserved before the
+// run ends (each also breaks the combo).
+export const MISS_CUSTOMERS = 5;
 
 // --- Difficulty stepping (a pure function of play time, after the tutorial) ---
 // Difficulty is quantized into levels so the game visibly steps up.
@@ -79,10 +82,13 @@ export const MAILBOX_DESPAWN_MARGIN = 8;
 export const MAILBOX_SPACING_START = 26; // Z gap between customers, early
 export const MAILBOX_SPACING_MIN = 15; // tightest at max difficulty
 export const MAILBOX_ACTIVE = 6;
-// Forward Z window (ahead of the scooter) a thrown pizza can still target. Kept
-// short so throwing is a Paperboy-style lob as a customer comes alongside, not a
-// long-range snipe.
-export const THROW_RANGE_Z = 18;
+// The throw window is the Z band [THROW_MIN_Z, THROW_RANGE_Z] ahead of the
+// scooter: a mailbox is only targetable while inside it, so each delivery is a
+// TIMED drop — too early is out of range, and closer than THROW_MIN_Z is too
+// late to lob (both waste the pizza). Kept tight on purpose (it used to be
+// 0.5..18, which let you hold the throw until fully alongside and never miss).
+export const THROW_RANGE_Z = 10;
+export const THROW_MIN_Z = 3;
 // Z past which a mailbox is considered "passed": it stops being a valid throw
 // target (you can't score a box you already rode by — targeting moves to the next
 // one ahead) and, if still pending, is marked missed (breaks the combo). Kept
