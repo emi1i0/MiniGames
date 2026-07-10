@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Hole in None and Cannon Dodge), each independently playable — except Bomba Palabra, which is **rooms-only** (needs a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Hole in None and Cannon Dodge), each independently playable — except Bomba Palabra and Cadena de Palabras, which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
 
 ## Conventions (must follow)
 
@@ -107,7 +107,8 @@ spoofeable. **Complementa** la infra de salas de Supabase, no la reemplaza:
 Supabase sigue siendo la fuente de verdad de lobby / marcador / rejoin; el server
 solo maneja el **estado en-ronda en memoria** y **no toca la DB**. Plan de fondo:
 `docs/server-realtime-plan.md`. **En uso: Bomba Palabra** (`word-bomb`, validacion
-por turnos) **y PONG** (`pong`, fisica de tiempo real / PvP 1v1).
+por turnos), **Cadena de Palabras** (`word-chain`, fork de Bomba con otra mecanica)
+**y PONG** (`pong`, fisica de tiempo real / PvP 1v1).
 
 Estructura de `server/` (paquete propio, aislado del build de Vite, con su propio
 `package.json` / `tsconfig.json` / `node_modules`, gitignoreado):
@@ -121,16 +122,20 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   `dispose`). Para agregar otro juego server-side se implementa un `RoomSim` y se
   llama `registerGame` en su propio namespace.
 - `src/protocol.ts` — tipos de mensajes (por juego: `wb:*` de Bomba Palabra,
-  `pg:*` de PONG). **Se duplican en el cliente** (p.ej.
-  `src/games/word-bomb/game/WordBombTransport.ts` y
+  `wc:*` de Cadena de Palabras, `pg:*` de PONG). **Se duplican en el cliente**
+  (p.ej. `src/games/word-bomb/game/WordBombTransport.ts`,
+  `src/games/word-chain/game/WordChainTransport.ts` y
   `src/games/pong/game/PongProtocol.ts`) por la regla de decoupling (no se
   comparte modulo entre `src/` y `server/`); si cambia el protocolo, tocar ambos
   lados.
 - `src/dictionary.ts` — diccionario de espanol embebido
-  (`an-array-of-spanish-words`, ~636k palabras) mas `src/extra-words.ts` para
-  Bomba Palabra: normaliza (conserva la ñ, saca acentos) y precomputa los
-  fragmentos jugables. Vive solo en el server (validacion no spoofeable, sin peso
-  en el bundle del front).
+  (`an-array-of-spanish-words`, ~637k palabras) mas `src/extra-words.ts`,
+  compartido por los dos juegos de palabras: normaliza (conserva la ñ, saca
+  acentos) y precomputa **los fragmentos jugables** (`randomFragment`, para Bomba
+  Palabra: subcadenas de 2-3 letras con >= 500 palabras) y **las letras iniciales
+  sorteables** (`randomInitial` / `hasInitial`, para Cadena de Palabras: letras con
+  >= 1000 palabras, o sea 22 — quedan afuera x, ñ e y). Vive solo en el server
+  (validacion no spoofeable, sin peso en el bundle del front).
 - `src/extra-words.ts` — array `EXTRA_WORDS` editable a mano: palabras que el
   diccionario base no trae (jerga, regionalismos). Se suman al set igual que el
   resto; requiere redeploy del server. Para agregar palabras se toca solo este
@@ -141,6 +146,14 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   retransmite las **reacciones** (`wb:emote`): puro relay validado contra un
   allowlist de ids, con cooldown por jugador, que **no** viaja en `wb:state` (es
   efimera). Ver el `CLAUDE.md` de `word-bomb` para el detalle del flujo y el tuning.
+- `src/games/wordchain.ts` — `WordChainSim`: **fork de Bomba Palabra** con otra
+  mecanica. El reto es una **letra** y la palabra tiene que **empezar** con ella; su
+  ultima letra es el reto del siguiente ("tronco" -> "o"). **Una sola vida**: el
+  timeout elimina en el acto, y el que sigue hereda la misma letra (la cadena no
+  avanzo). El reloj arranca en 12s y se acorta 200ms por eslabon, con piso de 5s.
+  Las letras pobres se juegan igual (`fax` -> te toca la X); solo se sortea otra si
+  la letra no tiene **ninguna** palabra detras. Difunde `wc:state`; mismas reacciones
+  y tipeo que Bomba. Ver el `CLAUDE.md` de `word-chain`.
 - `src/games/pong.ts` — `PongSim`: empareja la sala de a dos (un `Match` por par;
   el impar juega vs IA del server), corre la fisica de la pelota / colisiones /
   rampa / puntaje a ~30 fps y emite `pg:state` a cada jugador con su lado. La
@@ -152,9 +165,10 @@ Cliente: env `VITE_GAME_SERVER_URL` (documentada en `.env.example`). El juego
 carga `socket.io-client` con **import dinamico** (no pesa en los juegos que no lo
 usan). **Degradacion:** depende del juego. PONG degrada con gracia: sin
 `VITE_GAME_SERVER_URL` la sala cae a un partido local vs IA por jugador (y solo
-sigue siendo 1 jugador en la landing). Bomba Palabra **no** puede: existe por el
-server, asi que sin `VITE_GAME_SERVER_URL` muestra "no disponible" (excepcion
-deliberada y documentada a la regla de degradacion del repo).
+sigue siendo 1 jugador en la landing). Bomba Palabra y Cadena de Palabras **no**
+pueden: existen por el server (el diccionario vive ahi), asi que sin
+`VITE_GAME_SERVER_URL` muestran "no disponible" (excepcion deliberada y
+documentada a la regla de degradacion del repo).
 
 Comandos del server (dentro de `server/`): `npm run dev` (tsx watch),
 `npm run build` (tsc -> `dist/`), `npm start` (`node dist/index.js`). Deploy
