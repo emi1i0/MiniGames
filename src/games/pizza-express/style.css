@@ -262,11 +262,11 @@ body::after {
 .bubble {
   position: absolute;
   left: 50%;
-  top: 40%;
+  top: 16%;
   transform: translate(-50%, 8px);
   z-index: 15;
-  max-width: min(340px, 78vw);
-  padding: 12px 18px;
+  max-width: min(320px, 74vw);
+  padding: 11px 17px;
   background: #fff3dc;
   color: #6e2a12;
   border: 3px solid #8a5a2b;
