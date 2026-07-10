@@ -30,7 +30,8 @@ descubrirlo) y en el picker/votacion de salas como cualquier otro juego de sala.
   place`, asi el ultimo en pie (place 1) suma mas. No va al ranking global.
 - **Game server** (`/wordbomb`): turno actual, mecha (deadline absoluto), vidas,
   set de palabras usadas, validacion y orden de eliminacion. Difunde `wb:state`
-  en cada cambio; el cliente anima la mecha localmente entre snapshots.
+  en cada cambio; el cliente anima la mecha localmente entre snapshots. Tambien
+  retransmite las reacciones (ver abajo).
 
 ## Module layout
 
@@ -97,10 +98,63 @@ descubrirlo) y en el picker/votacion de salas como cualquier otro juego de sala.
 5. Cada cliente reporta su puntaje placement-based; el `RoomOverlay` muestra el
    resultado de la ronda y el marcador acumulado.
 
+## Reacciones (las "caritas")
+
+Durante la partida cualquier jugador puede mandar una reaccion, y lo que cambia es
+**la cara de su propio personaje** por `EMOTE_MS` (1.8s) mas un salto del avatar.
+**No son emojis** (el repo los prohibe): el protocolo manda un **id** de un allowlist
+cerrado (`risa` / `sorpresa` / `enojo` / `burla` / `llanto`) y cada cara esta
+**dibujada en el SVG** del personaje, igual que los corazones y la calavera.
+
+- **Quien y cuando**: todos los jugadores del roster, vivos o eliminados (el muerto
+  burlandose es medio la gracia) y tambien el de turno. **Los espectadores no**: nunca
+  llegan a conectar al game server, porque `RoomMode.applyState` corta antes de
+  `autoStartGame` para ellos y `onStart` (que dispara el `connect()`) jamas se llama.
+- **Sonido**: cada reaccion tiene su voz sintetizada en `SoundEffects.playEmote(id)`
+  (risa de tres silabas, "oh!" que sube, gruñido grave, cantito de burla, dos
+  sollozos). Suenan para todos, asi que van bajas (pico <= 0.09) y cortas; el
+  cooldown de 1s por jugador es lo que evita que se apilen. `blip()` acepta un
+  `delay` para encadenar silabas.
+- **Como**: dock de cabecitas abajo (`.wb__emotes`, z-index por encima del input
+  invisible) o atajos **1-5**. Los atajos escuchan en `window` y hacen `preventDefault`,
+  lo que cancela la insercion del digito en el input del jugador de turno — no se
+  pierde nada, las palabras son solo `[a-zñ]`. El boton hace `preventDefault` en su
+  `pointerdown` para **no robarle el foco al input** a mitad de palabra.
+- **Server** (`wb:emote`): puro relay. Valida el id contra el allowlist, aplica un
+  cooldown de 1s por jugador y difunde `{player, emote}`. **No toca el estado de la
+  partida ni entra en `wb:state`**, asi que es efimera: quien recarga la pagina no
+  revive las reacciones viejas. El dock tiene su propio cooldown (1.2s, un poco mas
+  largo) solo para no ofrecer un boton que el server va a descartar en silencio.
+- **La cara propia se pinta con el eco del server**, no de forma optimista: uno ve
+  exactamente lo mismo que ven los demas y el cooldown del server es el unico arbitro.
+  (Es lo contrario de `wb:typing`, que **si** se pinta local y **ignora** su eco,
+  porque llega por tecla y con lag pisaria lo recien escrito.)
+
+**Gotcha del DOM**: `Hud.render()` reconstruye todas las tarjetas en cada `wb:state`
+(que llega en cada turno y en cada palabra aceptada). Por eso la reaccion vigente vive
+en `Hud.emoteState` y se **re-aplica** al crear la tarjeta; si se apoyara solo en la
+clase del nodo, la cara se borraria al primer snapshot. El "pop" no se repone en el
+re-render (ya sono al llegar la reaccion).
+
+**Gotcha del CSS**: los rasgos automaticos van en `<g class="wb__base-face">` y los de
+reaccion en `<g class="wb__emote-face">`. Son **grupos excluyentes**: reaccionar apaga
+el grupo entero. Es a proposito — las caras automaticas se seleccionan con hasta cinco
+clases (`.wb__stage.is-critical .wb__player.is-turn .wb__mouth--panic`), asi que pisar
+rasgo por rasgo obligaria a una guerra de especificidad; ocultar el `<g>` padre la evita.
+
+**Agregar una reaccion**: sumar el id a `EMOTES` en `game/constants.ts`, dibujar su cara
+en `EMOTE_FACES` de `game/Hud.ts`, sumar la regla `is-emote--<id>` en `style.css`, y
+sumar el id al allowlist `EMOTES` de `server/src/games/wordbomb.ts` **y** al tipo
+`WbEmoteId` de `server/src/protocol.ts` + `game/WordBombTransport.ts` (los tipos estan
+duplicados a proposito, ver Gotchas). Requiere redeploy del server.
+
 ## Diccionario y fragmentos (server-side)
 
 `server/src/dictionary.ts` carga `an-array-of-spanish-words` (~636k palabras)
-**mas las palabras extra de `server/src/extra-words.ts`**, normaliza (minuscula,
+**mas las palabras extra de `server/src/extra-words.ts` y los toponimos de
+`server/src/places.ts`** (paises, capitales y ciudades, agregados para Cadena de
+Palabras y compartidos con este juego: sumaron el fragmento jugable `air`),
+normaliza (minuscula,
 saca acentos de vocales y dieresis pero **conserva la ñ**, descarta lo que no sea
 `[a-zñ]`) y **precomputa los fragmentos jugables**: todas las subcadenas de 2-3
 letras que existen en al menos `MIN_WORDS_PER_FRAGMENT` (500) palabras (~1800
@@ -110,7 +164,8 @@ partida).
 
 **Agregar palabras**: editar el array `EXTRA_WORDS` en
 `server/src/extra-words.ts` (jerga, regionalismos, terminos que el diccionario
-base no trae). Se normalizan y suman igual que el resto via el helper `ingest`;
+base no trae) o `PLACES` en `server/src/places.ts` (toponimos). Se normalizan y
+suman igual que el resto via el helper `ingest`;
 sumar palabras las hace **validas como respuesta** pero no crea fragmentos nuevos
 (eso depende de `MIN_WORDS_PER_FRAGMENT`; una lista corta no llega al umbral).
 El diccionario se arma al arrancar el proceso, asi que **hay que redeployar el

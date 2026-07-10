@@ -44,9 +44,36 @@ function warn(action: string, message: string): void {
   console.warn(`[rooms] ${action}: ${message}`);
 }
 
+/** 42703 = undefined_column: la DB todavia no corrio supabase/rooms.sql. */
+const UNDEFINED_COLUMN = "42703";
+
+/**
+ * True cuando la DB no tiene las columnas visibility / last_active. Lo detecta
+ * la primera query que las toca; a partir de ahi las features de salas publicas
+ * se apagan solas en vez de errorear en cada llamada.
+ */
+let legacySchema = false;
+
+/** Enciende el modo legacy avisando una sola vez que falta correr la migracion. */
+function markLegacySchema(): void {
+  if (legacySchema) return;
+  legacySchema = true;
+  warn(
+    "schema",
+    "faltan las columnas visibility/last_active en public.rooms: corre supabase/rooms.sql " +
+      "en el SQL Editor. Las salas funcionan igual, pero sin listado de salas publicas, " +
+      "sin purga automatica y sin poder expulsar jugadores.",
+  );
+}
+
 /**
  * Crea la sala y registra al host como jugador. Reintenta ante colision de
  * codigo (PK). Devuelve el codigo, o null si fallo / no hay Supabase.
+ *
+ * Si la DB no tiene todavia las columnas de salas publicas (no se corrio
+ * supabase/rooms.sql), la sala se crea igual sin ellas: sin listado publico ni
+ * purga, pero jugable. Crear una sala nunca deberia depender de una migracion
+ * pendiente, igual que el resto de los juegos no depende del leaderboard.
  */
 export async function createRoom(
   host: string,
@@ -58,18 +85,25 @@ export async function createRoom(
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const code = randomCode();
-    const { error } = await supabase
-      .from("rooms")
-      .insert({ code, host, settings, visibility, last_active: new Date().toISOString() });
+    const row: Record<string, unknown> = { code, host, settings };
+    if (!legacySchema) {
+      row.visibility = visibility;
+      row.last_active = new Date().toISOString();
+    }
+    const { error } = await supabase.from("rooms").insert(row);
     if (!error) {
       await supabase.from("room_players").upsert({ code, player: host });
       return code;
     }
     // 23505 = unique_violation (codigo ya usado): probar con otro.
-    if (error.code !== "23505") {
-      warn("createRoom", error.message);
-      return null;
+    if (error.code === "23505") continue;
+    if (error.code === UNDEFINED_COLUMN && !legacySchema) {
+      markLegacySchema();
+      attempt--; // el reintento sin columnas no gasta un intento de codigo
+      continue;
     }
+    warn("createRoom", error.message);
+    return null;
   }
   warn("createRoom", "no se pudo generar un codigo libre");
   return null;
@@ -85,7 +119,7 @@ export async function createRoom(
  */
 export async function fetchPublicRooms(): Promise<PublicRoom[]> {
   const supabase = getSupabase();
-  if (!supabase) return [];
+  if (!supabase || legacySchema) return [];
 
   const cutoff = new Date(Date.now() - ROOM_STALE_MS).toISOString();
   const { data, error } = await supabase
@@ -97,7 +131,8 @@ export async function fetchPublicRooms(): Promise<PublicRoom[]> {
     .order("last_active", { ascending: false })
     .limit(30);
   if (error) {
-    warn("fetchPublicRooms", error.message);
+    if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+    else warn("fetchPublicRooms", error.message);
     return [];
   }
   const rooms = (data ?? []) as { code: string; host: string; settings: RoomSettings }[];
@@ -129,21 +164,25 @@ export async function fetchPublicRooms(): Promise<PublicRoom[]> {
 /** Marca la sala como viva. La llaman los clientes adentro, cada HEARTBEAT_MS. */
 export async function touchRoom(code: string): Promise<void> {
   const supabase = getSupabase();
-  if (!supabase) return;
+  if (!supabase || legacySchema) return;
   const { error } = await supabase
     .from("rooms")
     .update({ last_active: new Date().toISOString() })
     .eq("code", code);
-  if (error) warn("touchRoom", error.message);
+  if (!error) return;
+  // Sin la columna no hay heartbeat: se apaga en vez de latir contra la pared.
+  if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+  else warn("touchRoom", error.message);
 }
 
 /** Cambia la visibilidad de la sala (solo el host, por convencion). */
 export async function setVisibility(code: string, visibility: RoomVisibility): Promise<boolean> {
   const supabase = getSupabase();
-  if (!supabase) return false;
+  if (!supabase || legacySchema) return false;
   const { error } = await supabase.from("rooms").update({ visibility }).eq("code", code);
   if (error) {
-    warn("setVisibility", error.message);
+    if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+    else warn("setVisibility", error.message);
     return false;
   }
   return true;
@@ -168,10 +207,12 @@ export async function deleteRoom(code: string): Promise<boolean> {
  */
 export async function purgeStaleRooms(): Promise<void> {
   const supabase = getSupabase();
-  if (!supabase) return;
+  if (!supabase || legacySchema) return;
   const cutoff = new Date(Date.now() - ROOM_STALE_MS).toISOString();
   const { error } = await supabase.from("rooms").delete().lt("last_active", cutoff);
-  if (error) warn("purgeStaleRooms", error.message);
+  if (!error) return;
+  if (error.code === UNDEFINED_COLUMN) markLegacySchema();
+  else warn("purgeStaleRooms", error.message);
 }
 
 /**

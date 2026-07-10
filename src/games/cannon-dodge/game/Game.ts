@@ -3,6 +3,7 @@ import {
   hashStr,
   MAX_DT,
   MUZZLE_OFFSET,
+  NET_IDLE_MS,
   NET_SEND_MS,
   REMOTE_STALE_MS,
   VIEW_SIZE,
@@ -74,6 +75,9 @@ export class Game {
    * so a still or unfocused player keeps broadcasting — rAF throttles/pauses in
    * background tabs, which made idle pirates vanish for everyone else. */
   private netTimer: ReturnType<typeof setInterval> | null = null;
+  /** Last snapshot actually broadcast, to skip re-sending an unchanged one. */
+  private lastSent: DodgePayload | null = null;
+  private lastSentAt = 0;
 
   private state: State = "ready";
   /** Survival time in seconds — this is the score. */
@@ -99,6 +103,7 @@ export class Game {
     this.room = initRoomMode("cannon-dodge", {
       getScore: () => this.score,
       onStart: () => this.beginCountdown(),
+      onReportedWaiting: () => this.state === "dead",
     });
     this.me = this.room?.me ?? "";
     if (this.room) void this.setupRoom();
@@ -173,22 +178,40 @@ export class Game {
     r.lastAt = Date.now();
   }
 
-  /** Timer-driven heartbeat: broadcasts our position while playing, and keeps
-   * emitting the wreck while dead so others still see where we went down. */
+  /** Timer-driven heartbeat: broadcasts our position from the countdown on (so
+   * everyone is on screen before the first shot), and keeps emitting the wreck
+   * while dead so others still see where we went down. */
   private heartbeat(): void {
-    if (this.state === "playing") this.emitPos(true);
+    if (this.state === "countdown" || this.state === "playing") this.emitPos(true);
     else if (this.state === "dead") this.emitPos(false);
   }
 
   private emitPos(alive: boolean): void {
     if (!this.channel) return;
-    this.channel.send({
+    const payload: DodgePayload = {
       p: this.me,
       x: Math.round(this.player.x),
       y: Math.round(this.player.y),
       a: Number(this.player.facing.toFixed(3)),
       alive,
-    });
+    };
+
+    // Un pirata quieto (o hundido) no necesita repetir el mismo snapshot 10
+    // veces por segundo: baja a un keepalive. Con la sala llena esto es la
+    // diferencia entre rozar el tope de mensajes/s del canal y no rozarlo.
+    const now = Date.now();
+    const last = this.lastSent;
+    const same =
+      last !== null &&
+      last.x === payload.x &&
+      last.y === payload.y &&
+      last.a === payload.a &&
+      last.alive === payload.alive;
+    if (same && now - this.lastSentAt < NET_IDLE_MS) return;
+
+    this.lastSent = payload;
+    this.lastSentAt = now;
+    this.channel.send(payload);
   }
 
   /** Eases the remote pirates toward their latest snapshot; purges stale ones. */
@@ -217,12 +240,14 @@ export class Game {
     const seed = this.room ? (this.roomSeed || (hashStr(`${this.room.code}:${this.room.round()}`) >>> 0)) : (Math.random() * 2 ** 31) >>> 0;
     this.field.reset(seed);
     this.remotes.clear();
+    this.lastSent = null;
     this.particles.clear();
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
     this.shakeTime = 0;
     this.hud.showTime(false);
+    this.hud.hideSpectate();
     this.hud.hide();
     this.hud.showCountdown(COUNTDOWN_LABELS[0]);
   }
@@ -255,9 +280,16 @@ export class Game {
     // heartbeat keeps re-sending this while we're dead).
     this.emitPos(false);
 
-    this.hud.showGameOver(this.score, this.best);
-    if (this.room) this.room.reportScore(this.score);
-    else this.hud.showRanking("cannon-dodge", this.score);
+    if (this.room) {
+      // En sala el naufrago se queda mirando: la isla sigue simulandose (misma
+      // semilla que los demas) y `onReportedWaiting` tapa la pantalla generica
+      // de espera, asi que solo mostramos una banda con el puntaje.
+      this.hud.showSpectate(this.score);
+      this.room.reportScore(this.score);
+    } else {
+      this.hud.showGameOver(this.score, this.best);
+      this.hud.showRanking("cannon-dodge", this.score);
+    }
   }
 
   private tick = (now: number): void => {
@@ -275,13 +307,7 @@ export class Game {
 
     if (this.state === "playing") {
       this.player.update(dt, this.input.vecX, this.input.vecY);
-      const res = this.field.update(dt, this.player);
-
-      if (res.spawned > 0) SoundEffects.playAppear();
-      for (const f of res.fired) {
-        SoundEffects.playBoom();
-        this.particles.smoke(f.x + f.dx * MUZZLE_OFFSET, f.y + f.dy * MUZZLE_OFFSET, f.dx, f.dy);
-      }
+      const res = this.stepField(dt);
 
       this.score += dt;
       this.hud.setTime(this.score);
@@ -295,8 +321,23 @@ export class Game {
       this.updateCountdown(dt);
     } else if (this.state === "dead") {
       this.deadFor += dt;
+      // Espectando en sala: los cañones siguen disparando (mismo mundo sembrado
+      // que el de los vivos) para ver como esquivan. El choque contra nuestro
+      // naufrago se ignora, ya estamos muertos.
+      if (this.room) this.stepField(dt);
       this.updateRemotes(dt);
     }
+  }
+
+  /** Avanza cañones y balas, con el sonido y el humo de cada disparo. */
+  private stepField(dt: number) {
+    const res = this.field.update(dt, this.player);
+    if (res.spawned > 0) SoundEffects.playAppear();
+    for (const f of res.fired) {
+      SoundEffects.playBoom();
+      this.particles.smoke(f.x + f.dx * MUZZLE_OFFSET, f.y + f.dy * MUZZLE_OFFSET, f.dx, f.dy);
+    }
+    return res;
   }
 
   /** Advances the countdown, updating the label and starting play when done. */

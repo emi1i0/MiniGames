@@ -1,36 +1,37 @@
 import type { Server } from "socket.io";
-import { checkWord, randomFragment } from "../dictionary.js";
+import { checkChainWord, hasInitial, randomInitial } from "../dictionary.js";
 import { GameRoom, registerGame, type RoomSim } from "../rooms.js";
-import type { WbEmoteId, WbGameover, WbPlayerView, WbState } from "../protocol.js";
+import type { WcEmoteId, WcGameover, WcPlayerView, WcState } from "../protocol.js";
 
 /**
- * Bomba Palabra: por turnos, aparece un fragmento (silaba/combo) y el jugador de
- * turno tiene hasta que se agote la mecha para escribir una palabra real que lo
- * contenga y no se haya usado. Si la mecha explota pierde una vida; al quedarse
- * sin vidas queda eliminado. Gana el ultimo en pie.
+ * Cadena de Palabras: fork de Bomba Palabra con otra mecanica. Al primer jugador le
+ * toca una letra al azar y tiene que escribir una palabra real que EMPIECE con ella;
+ * la ULTIMA letra de esa palabra es el reto del siguiente ("tronco" -> "o"). Y asi la
+ * cadena da la vuelta a la mesa. Una sola vida: si se te acaba el reloj, quedas
+ * eliminado en el acto. Gana el ultimo en pie.
  *
- * El server es autoritativo (turno, mecha, vidas, validacion contra el
- * diccionario) y difunde `wb:state` en cada cambio; los clientes animan la mecha
- * localmente entre snapshots. El deadline de ronda de Supabase sigue siendo el
- * corte duro; normalmente la partida termina por eliminacion antes.
+ * El server es autoritativo (turno, reloj, validacion contra el diccionario, palabras
+ * usadas) y difunde `wc:state` en cada cambio; los clientes animan el anillo del reloj
+ * localmente entre snapshots. El deadline de ronda de Supabase sigue siendo el corte
+ * duro; normalmente la partida termina por eliminacion antes.
  */
 
-/** Vidas iniciales por jugador. */
-const STARTING_LIVES = 3;
-/** Mecha base; se acorta a medida que avanza la partida (piso FUSE_MIN). */
-const FUSE_BASE_MS = 13000;
-const FUSE_STEP_MS = 150;
-const FUSE_MIN_MS = 6000;
+/** Una sola vida: un timeout te elimina. Es la diferencia central con Bomba Palabra. */
+const STARTING_LIVES = 1;
+/** Reloj del turno; se acorta con cada eslabon forjado, con piso CLOCK_MIN. */
+const CLOCK_BASE_MS = 12000;
+const CLOCK_STEP_MS = 200;
+const CLOCK_MIN_MS = 5000;
 /** Espera desde el primer jugador para que se conecten los del roster antes de
  * arrancar (los que falten quedan afuera y miran). */
 const START_GRACE_MS = 8000;
 /**
- * Reacciones permitidas. Es un allowlist cerrado a proposito: el cliente manda un
- * id, no un glifo, y cada id se dibuja como una cara del personaje. Debe coincidir
- * con `EMOTES` en `src/games/word-bomb/game/constants.ts` (tipos duplicados por la
- * regla de decoupling del repo).
+ * Reacciones permitidas. Allowlist cerrado: el cliente manda un id, no un glifo, y
+ * cada id se dibuja como una cara del personaje. Debe coincidir con `EMOTES` en
+ * `src/games/word-chain/game/constants.ts` (tipos duplicados por la regla de
+ * decoupling del repo).
  */
-const EMOTES: ReadonlySet<string> = new Set<WbEmoteId>([
+const EMOTES: ReadonlySet<string> = new Set<WcEmoteId>([
   "risa",
   "sorpresa",
   "enojo",
@@ -44,27 +45,31 @@ interface Player {
   nickname: string;
   lives: number;
   alive: boolean;
+  /** Eslabones forjados por este jugador (palabras aceptadas). */
+  links: number;
 }
 
-function fuseFor(accepted: number): number {
-  return Math.max(FUSE_MIN_MS, FUSE_BASE_MS - accepted * FUSE_STEP_MS);
+/** El reloj se acorta a medida que la cadena crece: la mesa se acelera sola. */
+function clockFor(chainLength: number): number {
+  return Math.max(CLOCK_MIN_MS, CLOCK_BASE_MS - chainLength * CLOCK_STEP_MS);
 }
 
-class WordBombSim implements RoomSim {
+class WordChainSim implements RoomSim {
   private phase: "waiting" | "playing" | "over" = "waiting";
   private players: Player[] = [];
   private roster: string[] = [];
   private turnIdx = 0;
-  private fragment: string | null = null;
+  /** Letra con la que debe empezar la palabra del turno actual. */
+  private letter: string | null = null;
   private deadline: number | null = null;
-  /** Duracion de la mecha del turno actual (para que el cliente dibuje la fraccion). */
-  private fuseTotal = FUSE_BASE_MS;
-  private fuseTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Duracion del reloj del turno actual (para que el cliente dibuje la fraccion). */
+  private clockTotal = CLOCK_BASE_MS;
+  private clockTimer: ReturnType<typeof setTimeout> | null = null;
   private startTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly used = new Set<string>();
-  private accepted = 0;
+  private chainLength = 0;
   private acceptSeq = 0;
-  private lastAccepted: WbState["lastAccepted"] = null;
+  private lastAccepted: WcState["lastAccepted"] = null;
   private readonly eliminationOrder: string[] = [];
   /** Ultima reaccion aceptada por jugador (epoch ms), para el cooldown. */
   private readonly lastEmoteAt = new Map<string, number>();
@@ -85,36 +90,35 @@ class WordBombSim implements RoomSim {
     }
 
     this.broadcastState();
-    if (this.phase === "over") this.room.emitTo(nickname, "wb:gameover", this.gameoverPayload());
+    if (this.phase === "over") this.room.emitTo(nickname, "wc:gameover", this.gameoverPayload());
   }
 
   leave(_nickname: string): void {
-    // No se elimina al desconectar: si la partida sigue, la mecha castiga su turno
-    // como a un AFK; si vuelve (recarga de pagina) se reengancha. Solo refresca las
-    // luces de "conectado".
+    // Desconectarse no elimina por si mismo: el reloj castiga su turno como a un AFK
+    // (y con una vida, ese timeout si lo elimina). Si vuelve antes, se reengancha.
     if (this.phase !== "over") this.broadcastState();
   }
 
   message(nickname: string, event: string, payload: unknown): void {
-    if (event === "wb:submit") {
+    if (event === "wc:submit") {
       const word = readString(payload, "word");
       if (word !== null) this.submit(nickname, word);
-    } else if (event === "wb:typing") {
+    } else if (event === "wc:typing") {
       const text = readString(payload, "text");
       if (text !== null && this.phase === "playing" && this.current()?.nickname === nickname) {
-        this.room.broadcast("wb:typing", { player: nickname, text: text.slice(0, 40) });
+        this.room.broadcast("wc:typing", { player: nickname, text: text.slice(0, 40) });
       }
-    } else if (event === "wb:emote") {
+    } else if (event === "wc:emote") {
       const emote = readString(payload, "emote");
       if (emote !== null) this.emote(nickname, emote);
     }
   }
 
   /**
-   * Reaccion: puro relay, no toca el estado de la partida ni entra en `wb:state`
-   * (es efimera: quien se reengancha no revive las de antes). Reacciona cualquiera
-   * y en cualquier momento — tambien el eliminado, que es medio la gracia — pero
-   * solo con un id del allowlist y respetando el cooldown.
+   * Reaccion: puro relay, no toca el estado de la partida ni entra en `wc:state` (es
+   * efimera: quien se reengancha no revive las de antes). Reacciona cualquiera y en
+   * cualquier momento — tambien el eliminado, que es medio la gracia — pero solo con
+   * un id del allowlist y respetando el cooldown.
    */
   private emote(nickname: string, emote: string): void {
     if (!EMOTES.has(emote)) return;
@@ -122,11 +126,11 @@ class WordBombSim implements RoomSim {
     const last = this.lastEmoteAt.get(nickname) ?? 0;
     if (now - last < EMOTE_COOLDOWN_MS) return;
     this.lastEmoteAt.set(nickname, now);
-    this.room.broadcast("wb:emote", { player: nickname, emote });
+    this.room.broadcast("wc:emote", { player: nickname, emote });
   }
 
   dispose(): void {
-    if (this.fuseTimer !== null) clearTimeout(this.fuseTimer);
+    if (this.clockTimer !== null) clearTimeout(this.clockTimer);
     if (this.startTimer !== null) clearTimeout(this.startTimer);
   }
 
@@ -142,27 +146,35 @@ class WordBombSim implements RoomSim {
     // (joined_at de Supabase), asi todos los clientes derivan el mismo turno.
     const seats = this.roster.filter((n) => this.room.isConnected(n));
     if (seats.length === 0) return; // nadie realmente conectado; se reintenta al proximo join
-    this.players = seats.map((nickname) => ({ nickname, lives: STARTING_LIVES, alive: true }));
+    this.players = seats.map((nickname) => ({
+      nickname,
+      lives: STARTING_LIVES,
+      alive: true,
+      links: 0,
+    }));
     this.phase = "playing";
     this.turnIdx = 0;
-    this.newTurn();
+    // La primera letra se sortea entre las que tienen muchas palabras detras.
+    this.newTurn(randomInitial());
   }
 
-  private newTurn(): void {
-    this.fragment = randomFragment();
-    this.fuseTotal = fuseFor(this.accepted);
-    this.deadline = Date.now() + this.fuseTotal;
-    this.armFuse();
+  /** Abre el turno con la letra dada y arranca el reloj. */
+  private newTurn(letter: string): void {
+    this.letter = letter;
+    this.clockTotal = clockFor(this.chainLength);
+    this.deadline = Date.now() + this.clockTotal;
+    this.armClock();
     this.broadcastState();
   }
 
-  private armFuse(): void {
-    if (this.fuseTimer !== null) clearTimeout(this.fuseTimer);
-    const ms = this.deadline !== null ? this.deadline - Date.now() : FUSE_BASE_MS;
-    this.fuseTimer = setTimeout(() => this.onFuseExpire(), Math.max(0, ms));
+  private armClock(): void {
+    if (this.clockTimer !== null) clearTimeout(this.clockTimer);
+    const ms = this.deadline !== null ? this.deadline - Date.now() : CLOCK_BASE_MS;
+    this.clockTimer = setTimeout(() => this.onClockExpire(), Math.max(0, ms));
   }
 
-  private onFuseExpire(): void {
+  /** Se acabo el tiempo: con una sola vida, el jugador de turno queda eliminado. */
+  private onClockExpire(): void {
     if (this.phase !== "playing") return;
     const player = this.current();
     if (!player) return;
@@ -175,45 +187,51 @@ class WordBombSim implements RoomSim {
       this.finish();
       return;
     }
+    // La cadena no avanzo: el siguiente hereda la misma letra que mato al anterior.
     this.advanceTurn();
-    this.newTurn();
+    this.newTurn(this.letter ?? randomInitial());
   }
 
   private submit(nickname: string, word: string): void {
     if (this.phase !== "playing") return;
     const player = this.current();
     if (!player || player.nickname !== nickname) {
-      this.room.emitTo(nickname, "wb:invalid", { reason: "not-your-turn" });
+      this.room.emitTo(nickname, "wc:invalid", { reason: "not-your-turn" });
       return;
     }
-    const { result, normalized } = checkWord(word, this.fragment ?? "");
+    const { result, normalized } = checkChainWord(word, this.letter ?? "");
     if (result !== "ok") {
-      this.room.emitTo(nickname, "wb:invalid", { reason: result });
+      this.room.emitTo(nickname, "wc:invalid", { reason: result });
       return;
     }
     if (this.used.has(normalized)) {
-      this.room.emitTo(nickname, "wb:invalid", { reason: "already-used" });
+      this.room.emitTo(nickname, "wc:invalid", { reason: "already-used" });
       return;
     }
-    // Palabra valida: se acepta, pasa el turno y arranca una mecha mas corta.
+    // Eslabon forjado: se acepta, y su ULTIMA letra es el reto del siguiente.
     this.used.add(normalized);
-    this.accepted += 1;
+    this.chainLength += 1;
     this.acceptSeq += 1;
+    player.links += 1;
     this.lastAccepted = { player: nickname, word: normalized, seq: this.acceptSeq };
+    // Las letras pobres se juegan igual (fax -> x): es parte del riesgo. Solo se
+    // sortea otra si la letra no tiene NINGUNA palabra detras, que dejaria la cadena
+    // muerta y no seria un reto sino un bug.
+    const next = normalized[normalized.length - 1];
     this.advanceTurn();
-    this.newTurn();
+    this.newTurn(hasInitial(next) ? next : randomInitial());
   }
 
   private finish(): void {
     this.phase = "over";
-    this.fragment = null;
+    this.letter = null;
     this.deadline = null;
-    if (this.fuseTimer !== null) {
-      clearTimeout(this.fuseTimer);
-      this.fuseTimer = null;
+    if (this.clockTimer !== null) {
+      clearTimeout(this.clockTimer);
+      this.clockTimer = null;
     }
     this.broadcastState();
-    this.room.broadcast("wb:gameover", this.gameoverPayload());
+    this.room.broadcast("wc:gameover", this.gameoverPayload());
   }
 
   // ---------- Helpers ----------
@@ -234,32 +252,32 @@ class WordBombSim implements RoomSim {
     }
   }
 
-  private playerViews(): WbPlayerView[] {
+  private playerViews(): WcPlayerView[] {
     return this.players.map((p) => ({
       nickname: p.nickname,
-      lives: p.lives,
       alive: p.alive,
       connected: this.room.isConnected(p.nickname),
+      links: p.links,
     }));
   }
 
   private broadcastState(): void {
-    const fuseMs = this.deadline !== null ? Math.max(0, this.deadline - Date.now()) : null;
-    const state: WbState = {
+    const clockMs = this.deadline !== null ? Math.max(0, this.deadline - Date.now()) : null;
+    const state: WcState = {
       phase: this.phase,
       turn: this.phase === "playing" ? this.current()?.nickname ?? null : null,
-      fragment: this.fragment,
+      letter: this.letter,
       deadline: this.deadline,
-      fuseMs,
-      fuseTotalMs: this.deadline !== null ? this.fuseTotal : null,
+      clockMs,
+      clockTotalMs: this.deadline !== null ? this.clockTotal : null,
       players: this.playerViews(),
-      usedCount: this.accepted,
+      chainLength: this.chainLength,
       lastAccepted: this.lastAccepted,
     };
-    this.room.broadcast("wb:state", state);
+    this.room.broadcast("wc:state", state);
   }
 
-  private gameoverPayload(): WbGameover {
+  private gameoverPayload(): WcGameover {
     const survivors = this.players.filter((p) => p.alive).map((p) => p.nickname);
     // Los eliminados mas tarde quedan mejor rankeados (2do, 3ro, ...).
     const eliminated = [...this.eliminationOrder].reverse();
@@ -282,11 +300,13 @@ function parseJoin(payload: unknown): { nickname: string; roster: string[] } | n
   const p = payload as Record<string, unknown>;
   const nickname = typeof p.nickname === "string" ? p.nickname : null;
   if (!nickname) return null;
-  const roster = Array.isArray(p.roster) ? p.roster.filter((x): x is string => typeof x === "string") : [];
+  const roster = Array.isArray(p.roster)
+    ? p.roster.filter((x): x is string => typeof x === "string")
+    : [];
   return { nickname, roster };
 }
 
-/** Engancha el juego en el namespace `/wordbomb`. */
-export function registerWordBomb(io: Server): void {
-  registerGame(io, "/wordbomb", "wb:join", parseJoin, (room) => new WordBombSim(room));
+/** Engancha el juego en el namespace `/wordchain`. */
+export function registerWordChain(io: Server): void {
+  registerGame(io, "/wordchain", "wc:join", parseJoin, (room) => new WordChainSim(room));
 }

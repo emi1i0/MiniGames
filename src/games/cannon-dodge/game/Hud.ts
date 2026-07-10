@@ -10,6 +10,7 @@ export class Hud {
   private readonly scoreLineEl: HTMLDivElement;
   private readonly hintEl: HTMLDivElement;
   private readonly countdownEl: HTMLDivElement;
+  private readonly spectateEl: HTMLDivElement;
   private readonly leaderboard = new LeaderboardPanel();
 
   constructor(container: HTMLElement) {
@@ -48,7 +49,10 @@ export class Hud {
     this.countdownEl = document.createElement("div");
     this.countdownEl.className = "countdown";
 
-    container.append(hud, this.overlayEl, this.countdownEl);
+    this.spectateEl = document.createElement("div");
+    this.spectateEl.className = "spectate";
+
+    container.append(hud, this.overlayEl, this.countdownEl, this.spectateEl);
   }
 
   /** Shows a countdown label ("3" / "2" / "1" / "YA"), or hides it when null. */
@@ -95,6 +99,18 @@ export class Hud {
         : `AGUANTASTE ${score.toFixed(1)} s  ·  MEJOR: ${best.toFixed(1)} s`;
     this.hintEl.style.display = "none";
     this.overlayEl.classList.remove("hidden");
+  }
+
+  /** Modo sala: al hundirte se sigue viendo la isla, con esta banda al pie. */
+  showSpectate(score: number): void {
+    this.overlayEl.classList.add("hidden");
+    this.spectateEl.textContent =
+      `TE HUNDIERON A LOS ${score.toFixed(1)} s · mirando a los demás`;
+    this.spectateEl.classList.add("is-shown");
+  }
+
+  hideSpectate(): void {
+    this.spectateEl.classList.remove("is-shown");
   }
 
   /** Muestra el ranking global del juego en la pantalla de game-over. */

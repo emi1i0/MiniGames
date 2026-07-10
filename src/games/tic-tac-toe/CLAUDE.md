@@ -11,10 +11,17 @@ tablero 3x3:
   y abre cada partida (juega primero). Es un modo de **racha de supervivencia**: cada
   victoria suma 1 y arranca otra partida; la primera derrota termina la corrida
   y la racha lograda es el puntaje. El ranking global es esa mejor racha.
-- **Sala (`?room=`)**: **PvP** por turnos sobre tablero compartido (como
-  Memoria). Los dos asientos son los dos primeros jugadores de la sala (X y O);
-  si hay mas, miran. Como no hay empate, siempre sale un ganador: gana 1, pierde
-  0 (esos puntajes quedan en la sala, no van al ranking global).
+- **Sala (`?room=`)**: **PvP** por turnos sobre tablero compartido (como Memoria
+  y Conecta 4). A diferencia de Memoria, **cada ronda empareja a TODOS los
+  jugadores en duelos 1v1** (no solo a los dos primeros): pares consecutivos por
+  orden de llegada (0-1, 2-3, ...), un tablero por pareja, todos jugando al mismo
+  tiempo. Si la cantidad de jugadores es **impar**, el ultimo se queda sin rival
+  humano y **juega contra la IA** en su propio dispositivo (tablero local, no
+  compartido) — su resultado igual puntua en la sala. Como no hay empate, siempre
+  sale un ganador: gana 1, pierde 0 (esos puntajes quedan en la sala, no van al
+  ranking global). El emparejado lo calcula cada cliente por su cuenta desde
+  `room.players()` (orden `joined_at`, deterministico), sin guardarlo: ver
+  `game/pairing.ts`.
 
 ## Module layout
 
@@ -31,7 +38,14 @@ tablero 3x3:
   lineas en las hojas; el ajuste por profundidad hace que prefiera ganar cuanto
   antes y demorar las derrotas. Fuerte pero vencible con dobles amenazas (lo que
   mantiene viable la racha).
-- `game/sharedMatch.ts` — controlador del modo sala (ver abajo).
+- `game/pairing.ts` — **logica pura de emparejado** del modo sala: `pairFor`
+  (a que tablero/pareja voy y si me toca la IA), `humanBoards` (todos los
+  tableros PvP de la ronda, para que el host los administre) y `AI_NAME`. Todos
+  los clientes calculan el mismo reparto desde `room.players()`.
+- `game/sharedMatch.ts` — controlador de UN tablero de sala (ver abajo).
+  Parametrizado por `boardNo` (fila de `room_match_state`) + `seats` (la pareja)
+  + `passive` (el host administra tableros que no juega: los crea y les destraba
+  el AFK sin tocar HUD/sonido/puntaje) + `spectate` (mira un tablero ajeno).
 - `game/Game.ts` — estados `ready | countdown | playing | over`, countdown
   3/2/1/YA compartido, modo solo (turnos humano/IA con `busy` que bloquea el
   input mientras la IA piensa o entre partidas de la racha), y delega el modo
@@ -46,29 +60,55 @@ tablero 3x3:
 
 ## Modo sala: como sincroniza
 
-Estado durable en `public.room_match_state` (una fila jsonb por sala+ronda, ver
-`supabase/rooms.sql` y `src/shared/room/matchState.ts`), con el patron estandar
-de salas: **escribir -> ping broadcast "sync" -> los demas refetchean**, mas
-poll de respaldo. Por turnos, la latencia por jugada no se nota.
+Estado durable en `public.room_match_state` (una fila jsonb por
+**sala+ronda+tablero**: la columna `board` distingue los tableros simultaneos de
+la ronda, uno por pareja; ver `supabase/rooms.sql` y
+`src/shared/room/matchState.ts`, cuyas funciones toman un `board` opcional que
+por defecto es 0 para los juegos de un solo tablero), con el patron estandar de
+salas: **escribir -> ping broadcast "sync" -> los demas refetchean**, mas poll de
+respaldo. Por turnos, la latencia por jugada no se nota.
 
-- El estado guardado es `TttState` + `players` (los dos nicknames de X y O) +
-  `seq` (correlativo de jugadas, para sonar cada movimiento remoto una vez).
+- El estado guardado es `TttState` + `players` (los dos nicknames de X y O de esa
+  pareja) + `seq` (correlativo de jugadas, para sonar cada movimiento remoto una
+  vez).
 - **Un unico UPDATE atomico por jugada** con version optimista; **local-first**
   para el jugador de turno (su ficha se ve al instante) y `forceRefresh` readopta
-  la DB ante conflicto de version.
-- **El host crea el tablero** al cargar la pagina de la ronda si no existe, con
-  `players` = los dos primeros de `room.players()` (orden por `joined_at`,
-  deterministico). Con menos de 2 jugadores muestra "Esperando un rival...".
-- **Anti-AFK**: si el jugador de turno no mueve en `AFK_MOVE_MS`, el host juega
-  una casilla al azar por el para que la partida (que no puede empatar) avance
-  hasta un ganador. El deadline de ronda sigue siendo el corte duro.
+  la DB ante conflicto de version. **Todas** las llamadas a `matchState.ts` pasan
+  el `boardNo` de la instancia: olvidarlo en el `updateMatchState` hace que las
+  jugadas del board 1 se escriban contra el board 0 y la partida quede trabada
+  (era el bug que tenia Conecta 4).
+- **Emparejado**: al terminar el countdown, `Game.startRoomMatches()` calcula con
+  `pairFor` mi tablero (mi pareja, o la IA si soy el jugador impar que sobra) y
+  arranca un `SharedMatch` activo para el. Si me toca la IA, corro una partida
+  **local** (la misma logica del modo solo, pero una sola partida) que reporta
+  1/0 a la sala.
+- **El host administra todos los tableros humanos**: crea la fila inicial de cada
+  uno (con la pareja correcta) y les destraba el AFK. Corre su propio tablero
+  activo mas un `SharedMatch` **pasivo** (`passive: true`) por cada otra pareja
+  (`humanBoards`), que no toca HUD/sonido/puntaje. Los tableros vs IA no usan DB,
+  asi que el host no los administra.
+- **Anti-AFK**: si el jugador de turno de un tablero no mueve en `AFK_MOVE_MS`, el
+  host juega una casilla al azar por el para que la partida (que no puede empatar)
+  avance hasta un ganador. El deadline de ronda sigue siendo el corte duro.
 - **Fin**: con `winner` definido, cada cliente reporta 1 (si gano) o 0 via
   `room.reportScore(...)`; los espectadores reportan 0. Recargar a mitad de
   partida reengancha (el estado vive en Postgres y `SharedMatch.boot()` lo
-  readopta).
+  readopta por `board`).
+- **Espectar al terminar**: como los duelos duran distinto, cuando tu partida
+  termina no ves la pantalla generica "esperando a los demas": pasas a **mirar
+  otra partida en curso** de la ronda (con 4 jugadores, la otra; con mas, una al
+  azar, y saltas a la siguiente cuando la mirada termina). Lo maneja
+  `Game.beginSpectating()`/`spectateNext()`: crean un `SharedMatch` con
+  `spectate: true` (renderiza el tablero ajeno en el HUD pero no juega, no
+  reporta, no crea el tablero ni administra el AFK). RoomMode oculta su overlay
+  de espera via el hook `onReportedWaiting` (devuelve true mientras haya algo que
+  mirar; false cuando no queda ninguna y vuelve la espera de siempre). Al cambiar
+  de tablero espectado se llama `SharedMatch.dispose()` para frenar los intervalos
+  de la instancia anterior (el `onSync` no se puede desuscribir, asi que su
+  `refresh` corta solo por el flag `disposed`).
 
 Usa el contexto extendido de `RoomMode` (`code`, `me`, `round()`, `players()`,
-`isHost()`, `ping()`, `onSync()`) igual que Memoria.
+`isHost()`, `ping()`, `onSync()`) igual que Memoria y Conecta 4.
 
 ## Integraciones estandar
 

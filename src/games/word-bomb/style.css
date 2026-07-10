@@ -635,6 +635,143 @@ body {
   display: block;
 }
 
+/* ---------- Reacciones (la cara del propio personaje) ---------- */
+
+/* Los rasgos automaticos (`.wb__base-face`) y los de reaccion (`.wb__emote-face`) son
+   grupos excluyentes: reaccionar apaga el grupo entero. Asi la cara de reaccion no
+   tiene que ganarle en especificidad a las de turno / panico / feliz / muerto, que se
+   apilan con hasta cinco clases. */
+.wb__emote-face,
+.wb__emo {
+  display: none;
+}
+.wb__player.is-emote .wb__base-face {
+  display: none;
+}
+.wb__player.is-emote .wb__emote-face {
+  display: block;
+}
+.wb__player.is-emote--risa .wb__emo--risa,
+.wb__player.is-emote--sorpresa .wb__emo--sorpresa,
+.wb__player.is-emote--enojo .wb__emo--enojo,
+.wb__player.is-emote--burla .wb__emo--burla,
+.wb__player.is-emote--llanto .wb__emo--llanto {
+  display: block;
+}
+
+/* Rasgos de las caras de reaccion (los de la cara base los pinta `.wb__mouth` y cia). */
+.wb__emo .wb__ln {
+  fill: none;
+  stroke: #241033;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.wb__emo .wb__fl,
+.wb__emo .wb__pupil {
+  fill: #241033;
+}
+.wb__emo .wb__white {
+  fill: #fff;
+}
+.wb__emo .wb__tongue {
+  fill: #ff7a8a;
+}
+.wb__emo .wb__tear {
+  fill: #8fd3ff;
+  stroke: #4a90c2;
+  stroke-width: 1;
+}
+
+/* El eliminado tambien reacciona (es media la gracia): mientras dura, sale del gris. */
+.wb__player.is-out.is-emote {
+  opacity: 0.95;
+}
+.wb__player.is-out.is-emote .wb__face-body {
+  fill: var(--silhouette);
+}
+
+/* El enojo le calienta el cuerpo a la bocha. Va despues del gris del eliminado (misma
+   especificidad) para que el muerto tambien se ponga rojo si se enoja. */
+.wb__player.is-emote--enojo .wb__face-body {
+  fill: #a8384f;
+}
+
+/* Salto al reaccionar. Va en el avatar y no en `.wb__face` porque esa ya la usa la
+   sacudida de panico (`wb-panic`), que sigue corriendo si al de turno se le da por
+   reaccionar con la mecha al rojo. */
+.wb__player.is-emote-pop .wb__avatar {
+  animation: wb-emote-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Dock: por encima del input invisible (z-index 5), que cubre todo el stage. */
+.wb__emotes {
+  position: absolute;
+  bottom: clamp(10px, 3vh, 26px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: clamp(4px, 1vmin, 9px);
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(3px);
+}
+.wb__emotes[hidden] {
+  display: none;
+}
+.wb__emote {
+  position: relative;
+  width: clamp(38px, 6.4vmin, 50px);
+  height: clamp(38px, 6.4vmin, 50px);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background 120ms ease;
+}
+.wb__emote:hover,
+.wb__emote:focus-visible {
+  transform: translateY(-3px) scale(1.08);
+  background: rgba(255, 210, 63, 0.2);
+  outline: none;
+}
+.wb__emote:active {
+  transform: translateY(0) scale(0.94);
+}
+.wb__emo-head {
+  width: 100%;
+  height: 100%;
+}
+.wb__emo-head .wb__emo {
+  display: block;
+}
+.wb__emo-head .wb__face-body {
+  fill: var(--silhouette);
+}
+.wb__emote-key {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+  color: var(--night-deep);
+  background: var(--spark);
+}
+/* Cooldown: el dock se apaga hasta que el server vuelva a aceptar una reaccion. */
+.wb__emotes.is-cooling {
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 /* Yo: nombre subrayado (sutil, para ubicarme). */
 .wb__player.is-me .wb__pname {
   text-decoration: underline;
@@ -726,6 +863,18 @@ body {
   }
   75% {
     transform: scale(1.12) translateX(1.5px);
+  }
+}
+/* Salto corto al reaccionar: la cara cambia y el personaje pega un brinco. */
+@keyframes wb-emote-pop {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  45% {
+    transform: scale(1.18) translateY(-7px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
   }
 }
 @keyframes wb-bubble {

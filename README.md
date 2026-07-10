@@ -56,6 +56,7 @@ Hecho con **Vite + TypeScript** (sin framework) y desplegado como sitio estátic
 | Memoria de Color | Precisión | Un color aparece unos segundos y desaparece: recreálo de memoria moviendo los deslizadores de matiz, saturación y brillo. Tres rondas y tu puntaje es el promedio de aciertos. Descubrí qué tan fiable es tu ojo. | [matiasgzlez](https://github.com/matiasgzlez) |
 | Hole in None | Precisión | Tres hoyos de minigolf cartoon en 3D con molinetes, bumpers y atajos arriesgados. Arrastrá desde la pelota para apuntar, soltá para pegar y embocá en la menor cantidad de golpes. | [emi1i0](https://github.com/emi1i0) |
 | Bomba Palabra | Party | Bomba de palabras por turnos: aparece un fragmento (una sílaba o combo de letras) y tenés hasta que se agote la mecha para escribir una palabra real que lo contenga. Si explota perdés una vida; el último en pie gana. Solo se juega en salas con amigos. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
+| Cadena de Palabras | Party | Al primero le toca una letra al azar y escribe una palabra que empiece con ella; la última letra de esa palabra es la del siguiente, y así la cadena da la vuelta a la mesa. Tenés una sola vida: si se te acaba el reloj quedás afuera. Gana el último en pie. Solo se juega en salas con amigos. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Cálculo Flash | Puzzle | Aparecen números de a uno que se van sumando y restando; memorizalos y al final escribí el resultado. En solitario las rondas suben de dificultad y un error termina la partida; en salas todos ven la misma cuenta y ganás puntos por acercarte al resultado. | [Facu-Basualdo](https://github.com/Facu-Basualdo) |
 | Número Fugaz | Puzzle | Aparece un número un instante y se esfuma: memorizalo y escribilo. Cada acierto suma un dígito y un error termina la partida; tu marca es la mayor cantidad de dígitos que recordás de corrido. | [matiasgzlez](https://github.com/matiasgzlez) |
 | Constelación | Puzzle | Se encienden unas celdas de la grilla un instante: memorizá el patrón y volvé a marcarlas. Cada nivel suma celdas y agranda la grilla; con 3 vidas, tu marca es el nivel más alto que alcanzás. | [matiasgzlez](https://github.com/matiasgzlez) |
@@ -94,7 +95,7 @@ Mirá cualquier carpeta de `src/games/<id>/` como referencia: cada una trae su p
 1. Hacé un **fork** del repo.
 2. Creá una rama para tu juego (`git checkout -b mi-juego`).
 3. Desarrollá, probá con `npm run build` y hacé commit.
-4. Abrí un **Pull Request** describiendo tu juego.
+4. Abrí un **Pull Request** describiendo tu juego en la rama develop.
 
 ¿Dudas o ideas? Abrí un **Issue** para charlarlo antes de arrancar. Toda contribución suma. ¡Gracias por jugar y por construir!
 

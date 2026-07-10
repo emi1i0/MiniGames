@@ -38,35 +38,39 @@ function blip(
   osc.stop(now + dur);
 }
 
-/** Efectos sintetizados con Web Audio (sin assets), en clave "prensa de papel". */
+/**
+ * Efectos sintetizados con Web Audio (sin assets), en clave "cadena forjada" (ver
+ * DESIGN.md): el vocabulario es el del yunque — martillo, metal que canta, hierro que
+ * se parte. Donde Bomba Palabra tiene una explosion, aca hay un quiebre.
+ */
 export class SoundEffects {
   /** Countdown tick (3 / 2 / 1 / YA) — mismo blip que el resto del repo. */
   static playCountdownTick(): void {
     blip("sine", 750, 0.05, 0.08);
   }
 
-  /** Palabra aceptada: un "sello" seco y satisfactorio. */
+  /** Palabra aceptada: martillazo en el yunque, con el metal cantando encima. */
   static playAccept(): void {
-    blip("triangle", 320, 0.09, 0.14);
-    blip("sine", 640, 0.12, 0.06);
+    blip("square", 190, 0.07, 0.13, 120); // el golpe
+    blip("sine", 1240, 0.16, 0.07, 880); // el metal que resuena
   }
 
-  /** Palabra rechazada: un zumbido corto y opaco. */
+  /** Palabra rechazada: un zumbido corto y opaco (el hierro no prende). */
   static playReject(): void {
     blip("sawtooth", 150, 0.16, 0.1, 90);
   }
 
-  /** La mecha exploto en el turno de alguien: golpe seco. */
-  static playExplode(): void {
-    blip("square", 110, 0.28, 0.16, 55);
+  /** El eslabon se parte: se acabo el tiempo y el jugador queda afuera. */
+  static playSnap(): void {
+    blip("sawtooth", 320, 0.3, 0.17, 60); // el hierro cediendo
+    blip("square", 900, 0.09, 0.07, 220); // el chasquido de la fractura
   }
 
   /**
    * Voz de cada reaccion, sintetizada (sin assets), en la clave cartoon del juego.
-   * Suenan para todos los de la sala y pueden pisarse con la mecha y la explosion,
-   * asi que van a volumen bajo (pico <= 0.09) y cortas (~90ms el "oh!" de sorpresa,
-   * ~430ms el sollozo de llanto, que es la mas larga): son un gesto, no un evento de
-   * la partida. El cooldown de 1s por jugador es lo que evita que se acumulen.
+   * Suenan para todos los de la sala y pueden pisarse con el reloj y el quiebre, asi
+   * que van a volumen bajo (pico <= 0.09) y cortas. El cooldown de 1s por jugador es
+   * lo que evita que se acumulen.
    */
   static playEmote(id: EmoteId): void {
     switch (id) {
