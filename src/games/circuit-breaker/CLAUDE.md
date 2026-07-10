@@ -120,3 +120,26 @@ paredes**. Si tocas una pared = choque: la senal vuelve al inicio y se cuenta.
   reenviar al alternar. Con sala: `reportScore(encoded)` del total, sin rankings.
 - La landing arma su propio selector de variantes desde `scoring.variants`/`variantLabel`
   (el campeon de la tarjeta usa `variants[0]` = `general`).
+- La ronda de sala tiene un tope de 3 min (`roomTimeLimitSec` en `meta.ts`).
+
+## Modo sala: F5 no reinicia la corrida
+
+La corrida (nivel alcanzado, reloj, choques, `levelScores`) se persiste en
+`sessionStorage` via `src/shared/room/roomRun.ts`, con guardado periodico
+(`SAVE_INTERVAL`, 0.5 s), al chocar, al pasar de nivel y al arrancar.
+`beginCountdown()` corta temprano si `resumeSavedRun()` encuentra un snapshot.
+
+- **La senal reaparece en el origen del nivel**, no en su posicion exacta: es
+  justo lo que hace un choque, asi que no hay que serializar posicion/direccion/
+  `path`.
+- **El reload se paga.** El snapshot guarda `savedAt` (epoch) y al retomar se suma
+  `elapsedSince(savedAt)` al `elapsed`: recargar no es una forma gratis de volver
+  al inicio del nivel. Sin esto seria ventaja, porque el ranking es
+  `direction: "lower"` (tiempo + choques).
+- **Al pasar de nivel se guarda el nivel SIGUIENTE** (`saveRun(levelIndex + 1, ...)`
+  en `reachEnd`). Si no, un reload durante el cartel "NIVEL N" haria repetir un
+  nivel que ya quedo puntuado en `levelScores`.
+- `loadLevel` remarca `levelStartElapsed`/`levelStartCrashes` contra el `elapsed`
+  actual, asi que `resumeSavedRun` los pisa con los guardados: si no, el puntaje
+  propio del nivel saldria falseado.
+- `win()` limpia el snapshot.

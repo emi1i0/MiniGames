@@ -29,4 +29,6 @@ Same scheme as Numerix (sliding-puzzle): `meta.ts` declares `direction: "lower"`
 
 ## Room mode (multiplayer)
 
-`initRoomMode("lights-out", { getScore, onStart })`. With `?room=` the size is fixed by `ROOM_VARIANTS["lights-out"]` ("5") and the selector is hidden; victory reports the encoded time+moves to the room instead of the global ranking, and Enter-to-retry is blocked (one run per round). Timeout partials are non-comparable with solved boards (`direction: "lower"`, handled by `points.ts`).
+`initRoomMode("lights-out", { getScore, onStart })`. With `?room=` the size is fixed by `ROOM_VARIANTS["lights-out"]` ("5") and the selector is hidden; victory reports the encoded time+moves to the room instead of the global ranking, and Enter-to-retry is blocked (one run per round). Timeout partials are non-comparable with solved boards (`direction: "lower"`, handled by `points.ts`), y la ronda tiene un tope de 90 s (`roomTimeLimitSec` en `meta.ts`).
+
+**F5 no reinicia la partida.** En sala el tablero, los movimientos y el arranque del cronometro se persisten en `sessionStorage` via `src/shared/room/roomRun.ts` (clave por sala+ronda+juego). `beginCountdown()` corta temprano si `resumeSavedRun()` encuentra un snapshot: retoma el mismo tablero sin countdown. El tiempo **no** se guarda acumulado sino como `startedAt` epoch, y `update()` lo recalcula con `elapsedSince()` mientras haya sala — asi recargar no reinicia ni pausa el reloj (sin sala se sigue sumando `dt` como siempre). `handleVictory()` limpia el snapshot.

@@ -10,6 +10,7 @@ export const meta: GameEntry = {
   category: "Puzzle",
   order: 47,
   added: "2026-07-09",
+  roomTimeLimitSec: 120,
 };
 
 // Scoring por defecto: { direction: "higher" } (nivel mas alto = mejor). No se

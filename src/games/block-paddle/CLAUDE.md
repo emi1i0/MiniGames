@@ -1,6 +1,6 @@
 # Block Paddle
 
-Single-player paddle-and-ball survival game. The player controls a paddle at the bottom of the screen, moving left and right to keep a ball bouncing. Each paddle hit increments the score and speeds up the ball (BALL_SPEED_INCREMENT per hit, capped at BALL_SPEED_MAX). Missing the ball ends the run. Plain 2D `<canvas>`, no Three.js.
+Single-player paddle-and-ball survival game. The player controls a paddle at the bottom of the screen, moving left and right to keep a ball bouncing. Each paddle hit increments the score, speeds up the ball (BALL_SPEED_INCREMENT per hit, capped at BALL_SPEED_MAX) and shrinks the paddle (PADDLE_SHRINK_PER_HIT, floored at PADDLE_WIDTH_MIN). Missing the ball ends the run. Plain 2D `<canvas>`, no Three.js.
 
 ## Module layout
 
@@ -17,6 +17,10 @@ Single-player paddle-and-ball survival game. The player controls a paddle at the
 **Portrait view box.** 480x720 (portrait) since the paddle is at the bottom and the ball travels vertically more than horizontally. Letterbox scaling handles any screen.
 
 **One life, score by returns.** The player has exactly one life. Each successful paddle hit increments the score. Speed ramps up with every hit until BALL_SPEED_MAX.
+
+**Difficulty ramps on two axes.** Ball speed grows and the paddle narrows with every hit (`paddleWidth`, a runtime field — `PADDLE_WIDTH` is only its starting value). The paddle shrinks around its own center and is re-clamped, so it never pops outside the walls. Everything that used to read the constant (pointer tracking, collision, bounce angle, clamp, render) must read the field.
+
+**Ball is sub-stepped.** At BALL_SPEED_MAX a single MAX_DT frame moves the ball further than the paddle's collision band is tall, so it would tunnel straight through. `updatePlaying` moves the paddle once, then integrates the ball in sub-steps of at most MAX_SUBSTEP_DIST px (`stepBall`), bailing out of the loop as soon as the state leaves `"playing"` (i.e. the ball was missed). Raising BALL_SPEED_MAX is safe because of this; lowering MAX_SUBSTEP_DIST below BALL_RADIUS is what would cost frames for nothing.
 
 **Bounce angle from paddle position.** Where the ball hits the paddle determines the outgoing angle: center hits go nearly straight up, edge hits go steep. Formula: `relX * 0.7` radians offset from straight up (-PI/2).
 

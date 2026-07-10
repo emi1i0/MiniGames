@@ -12,6 +12,7 @@ export const meta: GameEntry = {
   category: "Puzzle",
   order: 145,
   added: "2026-07-08",
+  roomTimeLimitSec: 120,
 };
 
 export const scoring: GameScoring = {

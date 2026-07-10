@@ -95,4 +95,17 @@ Gotcha: la votacion es host-autoritativa (el host tallya). Si el host se
 desconecta durante la votacion no hay takeover (la fase `playing` sin reportar no
 es "estable" para el takeover de `roomMode`); mismo nivel de confiabilidad que
 los tableros compartidos. El tope `VOTE_TIMEOUT_MS` acota la espera y cuenta
-contra el tope de ronda si la sala tiene limite de tiempo.
+contra el tope de ronda (3 min, `roomTimeLimitSec` en `meta.ts`).
+
+## Modo sala: F5 no reinicia la partida
+
+Las varillas, los movimientos y el arranque del cronometro se persisten en
+`sessionStorage` via `src/shared/room/roomRun.ts` (clave por sala+ronda+juego).
+El corte esta en `startRoomVote()` —el hook `onStart`, que un reload vuelve a
+disparar—: si `resumeSavedRun()` encuentra un snapshot, **se saltea la votacion
+de discos** (ya se voto) y se retoma el tablero tal cual, sin countdown. El
+tiempo se guarda como `startedAt` epoch y `update()` lo recalcula con
+`elapsedSince()` mientras haya sala, asi recargar no reinicia ni pausa el reloj
+(sin sala se sigue sumando `dt`). `handleVictory()` limpia el snapshot. Sin esto,
+al recargar se rearmaba la torre con `moves = 0` y el cronometro desde cero, lo
+que ademas era ventaja: el ranking es `direction: "lower"`.

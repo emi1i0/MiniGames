@@ -28,11 +28,26 @@ import {
   buildObstacles,
   type Obstacles,
 } from "./obstacles";
+import { clearRoomRun, loadRoomRun, saveRoomRun } from "../../../shared/room/roomRun";
 import { RaceChannel, type MapPayload, type VotePayload } from "./RaceChannel";
 import { Renderer, type RemoteCar, type Skid } from "./Renderer";
 import { TRACK_DEFS, buildTrack, trackPreview, type Track } from "./tracks";
 
 type State = "loading" | "mapvote" | "ready" | "countdown" | "racing" | "finished";
+
+/**
+ * Carrera en curso persistida en sala, para sobrevivir un F5 (ver roomRun.ts).
+ * No se guarda la posicion del auto: al retomar vuelve a la grilla y hay que
+ * rehacer los sectores de la vuelta. Lo que NO se reinicia es el cronometro:
+ * `startEpoch` es un instante de reloj de pared, asi que recargar cuesta el tiempo
+ * real que tardo. Sin esto, recargar reiniciaba el reloj y mejoraba el tiempo
+ * reportado, porque el ranking es `direction: "lower"`.
+ */
+interface SavedRun {
+  trackIdx: number;
+  lap: number;
+  startEpoch: number;
+}
 
 const COUNTDOWN_SEC = 3;
 /** Duracion de la votacion de circuito en sala. */
@@ -81,6 +96,8 @@ export class Game {
 
   private countdownLeft = 0;
   private startTime = 0;
+  /** Instante de largada en reloj de pared (epoch), para el resume tras un F5. */
+  private startEpoch = 0;
   private finalMs = 0;
   private lap = 0;
   private prevS = 0;
@@ -350,8 +367,45 @@ export class Game {
   private go(): void {
     this.state = "racing";
     this.startTime = performance.now();
+    this.saveRun(Date.now());
     this.hud.showCountdown("¡YA!", this.track.theme.accent);
     window.setTimeout(() => this.hud.hideCountdown(), 700);
+  }
+
+  /**
+   * Retoma la carrera guardada de esta ronda tras un reload. El auto vuelve a la
+   * grilla y los sectores de la vuelta en curso se rehacen, pero el reloj arranca
+   * donde estaba: `startTime` se retrasa por el tiempo real ya corrido, asi
+   * recargar no lo reinicia (seria ventaja: el ranking es "lower").
+   */
+  private resumeSavedRun(): boolean {
+    const s = loadRoomRun<SavedRun>(this.room!, "car-race");
+    if (!s || !Number.isFinite(s.trackIdx) || !Number.isFinite(s.startEpoch)) return false;
+    if (!Number.isFinite(s.lap) || s.lap < 0) return false;
+    if (s.trackIdx < 0 || s.trackIdx >= TRACK_DEFS.length) return false;
+
+    this.mapDecided = true;
+    // setupTrack -> placeAtGrid ya deja el auto en la grilla con `lap` en 0,
+    // `sectors` limpios y `prevS` justo antes de la meta (no pisar ese valor: en 0
+    // no se detectaria el cruce de meta). Solo hay que restaurar la vuelta.
+    this.setupTrack(s.trackIdx, this.roomSeed);
+    if (s.lap >= this.track.def.laps) return false; // ya deberia haber reportado
+
+    this.lap = s.lap;
+    this.startEpoch = s.startEpoch;
+    this.startTime = performance.now() - (Date.now() - s.startEpoch);
+    this.state = "racing";
+    this.hud.hideOverlay();
+    this.hud.setLap(this.lap + 1, this.track.def.laps);
+    return true;
+  }
+
+  /** Snapshot de la carrera. No hace nada fuera de sala. */
+  private saveRun(startEpoch = this.startEpoch): void {
+    if (!this.room) return;
+    this.startEpoch = startEpoch;
+    const data: SavedRun = { trackIdx: this.selectedTrack, lap: this.lap, startEpoch };
+    saveRoomRun(this.room, "car-race", data);
   }
 
   private elapsedMs(): number {
@@ -438,7 +492,11 @@ export class Game {
       // En sala, largar la votacion de circuito recien cuando la sala arranca a
       // jugar (tras el briefing / voto de tiempo). Fuera de sala nunca queda en
       // 'loading' (boot pasa directo a 'ready').
-      if (this.room && this.room.status() === "playing") this.startMapVote();
+      if (this.room && this.room.status() === "playing") {
+        // Un F5 vuelve a caer aca con la sala todavia en 'playing'. Si esta carrera
+        // ya estaba corriendo, se retoma: la votacion de circuito ya paso.
+        if (!this.resumeSavedRun()) this.startMapVote();
+      }
       return;
     }
 
@@ -508,6 +566,7 @@ export class Game {
     if (this.prevS > 0.9 && s < 0.1 && this.sectors.every(Boolean)) {
       this.lap++;
       this.sectors = [false, false, false];
+      this.saveRun(); // la vuelta ganada tiene que sobrevivir un F5
       if (this.lap >= this.track.def.laps) this.finishRace();
     }
     this.prevS = s;
@@ -524,6 +583,8 @@ export class Game {
 
     const ms = Math.round(this.finalMs);
     if (this.room) {
+      // La carrera de la ronda termino: un reload ya no debe retomarla.
+      clearRoomRun(this.room, "car-race");
       this.room.reportScore(ms);
       return;
     }

@@ -118,3 +118,22 @@ marcas (`car.slip > 45`) esta en `recordSkids`.
 Cumple el patron obligatorio Enter-para-empezar 3/2/1/YA (estado `countdown` +
 `Hud.showCountdown`). En sala arranca solo tras cerrarse la votacion de circuito
 (estado `mapvote` -> `countdown`), sin que cada jugador tenga que tocar Enter.
+
+## Modo sala: F5 no reinicia la carrera
+
+La carrera (circuito votado, vuelta, instante de largada) se persiste en
+`sessionStorage` via `src/shared/room/roomRun.ts`, al largar (`go`) y en cada
+vuelta. El resume se engancha donde el loop larga la votacion (estado `loading` +
+sala en `playing`): si hay snapshot, se saltea la votacion (ya paso) y se retoma.
+
+- **El reloj no se reinicia**: `startEpoch` es reloj de pared, y al retomar
+  `startTime = performance.now() - (Date.now() - startEpoch)`. Sin esto, recargar
+  medía el tiempo desde la recarga y **mejoraba** el resultado, porque el ranking
+  es `direction: "lower"`. Recargar ahora cuesta el tiempo real que tardo.
+- **El auto vuelve a la grilla** y hay que rehacer los sectores de la vuelta en
+  curso: recargar es castigo, no atajo. No se serializa posicion ni velocidad.
+- **Gotcha:** `setupTrack` -> `placeAtGrid` ya deja `lap` en 0, `sectors` limpios y
+  `prevS` **justo antes de la meta** (~0.98). `resumeSavedRun` solo pisa `lap`: si
+  ademas pusiera `prevS = 0`, la deteccion de cruce de meta
+  (`prevS > 0.9 && s < 0.1`) no dispararia y la vuelta no cerraria nunca.
+- `finishRace` limpia el snapshot.

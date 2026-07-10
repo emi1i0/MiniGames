@@ -1,15 +1,6 @@
+import { getAudioContext, resumeAudio } from "./audioContext";
+import { EmoteAudio } from "./EmoteAudio";
 import type { EmoteId } from "./constants";
-
-let audioCtx: AudioContext | null = null;
-
-function getAudioContext(): AudioContext | null {
-  if (typeof window === "undefined") return null;
-  if (!audioCtx) {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioContextClass) audioCtx = new AudioContextClass();
-  }
-  return audioCtx;
-}
 
 /** `delay` (seg) permite encadenar blips en una frase: una risa son varias silabas. */
 function blip(
@@ -22,7 +13,7 @@ function blip(
 ): void {
   const ctx = getAudioContext();
   if (!ctx) return;
-  if (ctx.state === "suspended") ctx.resume();
+  resumeAudio(ctx);
   const now = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -67,18 +58,24 @@ export class SoundEffects {
   }
 
   /**
-   * Voz de cada reaccion, sintetizada (sin assets), en la clave cartoon del juego.
-   * Suenan para todos los de la sala y pueden pisarse con el reloj y el quiebre, asi
-   * que van a volumen bajo (pico <= 0.09) y cortas. El cooldown de 1s por jugador es
-   * lo que evita que se acumulen.
+   * Voz de cada reaccion. Primero intenta el sample real (`EmoteAudio`, mp3 en
+   * `public/sfx/emotes/`); si todavia no bajo, no existe o no decodifico, cae a la
+   * version sintetizada de abajo. Suenan para todos los de la sala y pueden pisarse con
+   * el reloj y el quiebre, asi que van a volumen bajo (pico <= 0.09 las sintetizadas,
+   * `SAMPLE_GAIN` los samples) y cortas. El cooldown de 1s por jugador evita que se
+   * acumulen.
    */
   static playEmote(id: EmoteId): void {
+    if (EmoteAudio.play(id)) return;
     switch (id) {
       case "risa":
-        // "ja-ja-ja": tres silabas que caen de tono.
-        blip("triangle", 520, 0.07, 0.07, 430, 0);
-        blip("triangle", 470, 0.07, 0.06, 390, 0.1);
-        blip("triangle", 420, 0.08, 0.05, 350, 0.2);
+        // Risa muy aguda y rapida (tipo ardilla/rana de TikTok).
+        blip("sine", 900, 0.06, 0.07, 1100, 0);
+        blip("sine", 1000, 0.06, 0.07, 1200, 0.07);
+        blip("sine", 1100, 0.06, 0.07, 1300, 0.14);
+        blip("sine", 1200, 0.06, 0.07, 1000, 0.21);
+        blip("sine", 1000, 0.06, 0.07, 800, 0.28);
+        blip("sine", 900, 0.06, 0.07, 1100, 0.35);
         break;
       case "sorpresa":
         // Un "oh!" que sube de golpe.

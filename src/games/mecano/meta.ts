@@ -11,6 +11,7 @@ export const meta: GameEntry = {
   category: "Reflejos",
   order: 275,
   added: "2026-07-06",
+  roomTimeLimitSec: 120,
 };
 
 // Scoring is the default { direction: "higher" } (more PPM is better), so no

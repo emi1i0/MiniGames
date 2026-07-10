@@ -3,6 +3,8 @@ import {
   CORRECT_HOLD_MS,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP_MS,
+  ANSWER_TIME_MS,
+  ANSWER_TICK_MS,
   bestKey,
   startDigits,
   showMsFor,
@@ -41,6 +43,10 @@ export class Game {
   private vanishTimer: number | null = null;
   private correctTimer: number | null = null;
   private overTimer: number | null = null;
+  /** Refresco del reloj de respuesta (fase "input"). */
+  private inputTimer: number | null = null;
+  /** Fin del tope para responder (performance.now()), valido en estado "input". */
+  private inputDeadline = 0;
 
   constructor(container: HTMLElement) {
     this.bests.aleatorio = readBest("aleatorio");
@@ -177,9 +183,25 @@ export class Game {
     this.state = "input";
     this.typed = "";
     this.hud.showEntry(this.digits);
+
+    this.inputDeadline = performance.now() + ANSWER_TIME_MS;
+    this.hud.setAnswerTime(ANSWER_TIME_MS, ANSWER_TIME_MS);
+    this.inputTimer = window.setInterval(() => this.tickInput(), ANSWER_TICK_MS);
+  }
+
+  /** Reloj de la respuesta. Al vencer, se acabo: cuenta como error. */
+  private tickInput(): void {
+    if (this.state !== "input") {
+      this.clearTimer("inputTimer");
+      return;
+    }
+    const left = this.inputDeadline - performance.now();
+    this.hud.setAnswerTime(Math.max(0, left), ANSWER_TIME_MS);
+    if (left <= 0) this.onWrong();
   }
 
   private onCorrect(): void {
+    this.clearTimer("inputTimer");
     this.state = "correct";
     this.score = this.digits;
     if (this.bests[this.mode] === null || this.score > (this.bests[this.mode] as number)) {
@@ -199,6 +221,7 @@ export class Game {
   }
 
   private onWrong(): void {
+    this.clearTimer("inputTimer");
     this.state = "wrong";
     this.hud.showWrong(this.target, this.typed);
     SoundEffects.playWrong();
@@ -222,10 +245,13 @@ export class Game {
     return s;
   }
 
-  private clearTimer(name: "countdownTimer" | "showTimer" | "vanishTimer" | "correctTimer" | "overTimer"): void {
+  private clearTimer(
+    name: "countdownTimer" | "showTimer" | "vanishTimer" | "correctTimer" | "overTimer" | "inputTimer",
+  ): void {
     const id = this[name];
     if (id !== null) {
-      if (name === "countdownTimer") window.clearInterval(id);
+      // countdownTimer e inputTimer son intervalos; el resto, timeouts.
+      if (name === "countdownTimer" || name === "inputTimer") window.clearInterval(id);
       else window.clearTimeout(id);
       this[name] = null;
     }
@@ -237,6 +263,7 @@ export class Game {
     this.clearTimer("vanishTimer");
     this.clearTimer("correctTimer");
     this.clearTimer("overTimer");
+    this.clearTimer("inputTimer");
   }
 
   dispose(): void {

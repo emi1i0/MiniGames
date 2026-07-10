@@ -27,8 +27,34 @@ import { SoundEffects } from "./SoundEffects";
 import { encodeTimeMoves, formatClock } from "../../../shared/scoring-core";
 import { submitScoreIfTop } from "../../../shared/leaderboard";
 import { initRoomMode, type RoomMode } from "../../../shared/room/roomMode";
+import {
+  clearRoomRun,
+  elapsedSince,
+  loadRoomRun,
+  saveRoomRun,
+} from "../../../shared/room/roomRun";
 
 type State = "ready" | "countdown" | "playing" | "crash" | "clear" | "won";
+
+/**
+ * Corrida en curso persistida en sala, para sobrevivir un F5 (ver roomRun.ts).
+ * No se guarda la posicion exacta de la senal: al retomar se la ubica en el
+ * origen del nivel, que es exactamente lo que hace un choque. Lo que no puede
+ * perderse es el reloj (el ranking es "lower"), los choques y el nivel alcanzado.
+ */
+interface SavedRun {
+  levelIndex: number;
+  elapsed: number;
+  crashes: number;
+  levelScores: number[];
+  levelStartElapsed: number;
+  levelStartCrashes: number;
+  /** Epoch ms del snapshot: el tiempo del reload tambien cuenta. */
+  savedAt: number;
+}
+
+/** Cada cuanto (segundos de juego) se persiste la corrida mientras se juega. */
+const SAVE_INTERVAL = 0.5;
 
 interface Deco {
   x: number;
@@ -72,6 +98,8 @@ export class Game {
   // Corrida (acumula a lo largo de todos los niveles).
   private elapsed = 0;
   private crashes = 0;
+  /** Acumulador del guardado periodico de la corrida (solo en sala). */
+  private saveAcc = 0;
   // Para el ranking por nivel: tiempo/choques acumulados al empezar el nivel actual,
   // y el puntaje codificado de cada nivel ya completado (index = nivel - 1).
   private levelStartElapsed = 0;
@@ -267,6 +295,11 @@ export class Game {
   }
 
   private beginCountdown(): void {
+    // En sala, un F5 vuelve a pasar por aca (la ronda sigue en "playing" y
+    // RoomMode redispara onStart): si hay corrida guardada se retoma en el nivel
+    // alcanzado, con su reloj y sus choques, en vez de empezar de cero.
+    if (this.room && this.resumeSavedRun()) return;
+
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
@@ -274,6 +307,62 @@ export class Game {
     this.hud.showHud(false);
     this.hud.hide();
     this.hud.showCountdown(COUNTDOWN_LABELS[0]);
+  }
+
+  /**
+   * Retoma la corrida guardada de esta ronda tras un reload. La senal reaparece en
+   * el origen del nivel alcanzado (igual que tras un choque) pero el reloj sigue
+   * corriendo: `savedAt` hace que el tiempo del reload tambien se pague, asi
+   * recargar no es una forma gratis de volver al inicio del nivel.
+   */
+  private resumeSavedRun(): boolean {
+    const s = loadRoomRun<SavedRun>(this.room!, "circuit-breaker");
+    if (!s || !Array.isArray(s.levelScores)) return false;
+    if (!Number.isFinite(s.elapsed) || !Number.isFinite(s.crashes)) return false;
+    if (!Number.isFinite(s.savedAt) || !Number.isFinite(s.levelIndex)) return false;
+    if (s.levelIndex < 1 || s.levelIndex > LEVEL_COUNT) return false;
+
+    this.elapsed = s.elapsed + elapsedSince(s.savedAt);
+    this.crashes = s.crashes;
+    this.levelScores = [...s.levelScores];
+
+    this.loadLevel(s.levelIndex);
+    // loadLevel remarca el inicio del nivel contra el `elapsed` actual: se pisa con
+    // el guardado para que el puntaje propio del nivel no se falsee.
+    this.levelStartElapsed = s.levelStartElapsed;
+    this.levelStartCrashes = s.levelStartCrashes;
+
+    this.state = "playing";
+    this.hud.setTimer(this.elapsed);
+    this.hud.setCrashes(this.crashes);
+    this.hud.showHud(true);
+    this.hud.hide();
+    this.hud.showCountdown(null);
+    return true;
+  }
+
+  /**
+   * Snapshot de la corrida para sobrevivir un F5. No hace nada fuera de sala.
+   * `level` / `startElapsed` / `startCrashes` se pasan explicitos al pasar de nivel,
+   * donde hay que guardar el nivel SIGUIENTE (si no, un reload durante el cartel
+   * "NIVEL N" haria repetir un nivel ya puntuado).
+   */
+  private saveRun(
+    level = this.levelIndex,
+    startElapsed = this.levelStartElapsed,
+    startCrashes = this.levelStartCrashes,
+  ): void {
+    if (!this.room) return;
+    const data: SavedRun = {
+      levelIndex: level,
+      elapsed: this.elapsed,
+      crashes: this.crashes,
+      levelScores: this.levelScores,
+      levelStartElapsed: startElapsed,
+      levelStartCrashes: startCrashes,
+      savedAt: Date.now(),
+    };
+    saveRoomRun(this.room, "circuit-breaker", data);
   }
 
   private resetRun(): void {
@@ -290,6 +379,8 @@ export class Game {
     this.hud.showHud(true);
     this.hud.hide();
     this.hud.showCountdown(null);
+    this.saveAcc = 0;
+    this.saveRun();
   }
 
   // --- Bucle principal ---
@@ -350,6 +441,13 @@ export class Game {
   private updatePlaying(dt: number): void {
     this.elapsed += dt;
     this.hud.setTimer(this.elapsed);
+
+    // Persistencia periodica: un F5 no puede costar mas de SAVE_INTERVAL de avance.
+    this.saveAcc += dt;
+    if (this.saveAcc >= SAVE_INTERVAL) {
+      this.saveAcc = 0;
+      this.saveRun();
+    }
 
     // La senal avanza sola en la direccion actual.
     const dist = SPEED * dt;
@@ -440,6 +538,9 @@ export class Game {
 
     if (this.levelIndex < LEVEL_COUNT) {
       // Pasa al siguiente nivel: cartel + pausa; el tiempo/choques se mantienen.
+      // Se guarda ya apuntando al nivel siguiente: un reload durante el cartel no
+      // debe hacer repetir este nivel, que ya quedo puntuado en levelScores.
+      this.saveRun(this.levelIndex + 1, this.elapsed, this.crashes);
       SoundEffects.playWin();
       this.hud.showBanner(`NIVEL ${this.levelIndex + 1}`, "#33e39a");
       this.state = "clear";
@@ -482,12 +583,15 @@ export class Game {
     this.hud.setCrashes(this.crashes);
     this.hud.showBanner("CHOQUE");
     SoundEffects.playCrash();
+    this.saveRun();
   }
 
   private win(): void {
     if (this.state === "won") return; // una sola vez por corrida
     this.state = "won";
     this.wonFor = 0;
+    // La corrida de la ronda termino: un reload ya no debe retomarla.
+    if (this.room) clearRoomRun(this.room, "circuit-breaker");
     SoundEffects.playWin();
     this.hud.showHud(false);
 

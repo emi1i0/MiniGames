@@ -1,6 +1,7 @@
 import {
   BEST_KEY,
   getLevelConfig,
+  getRoomLevelConfig,
   COUNTDOWN_LABELS,
   COUNTDOWN_STEP,
   MAX_DT,
@@ -556,7 +557,7 @@ export class Game {
       }
 
     } else if (this.room.isHost()) {
-      const config = getLevelConfig(1);
+      const config = getRoomLevelConfig(1);
       const initialCoinSlot = Math.floor(Math.random() * config.cups);
       const swaps = this.generateSwapsList(config.cups, config.swaps);
 
@@ -734,7 +735,7 @@ export class Game {
       data.choices = {};
       data.revealed = false;
 
-      const config = getLevelConfig(data.level);
+      const config = getRoomLevelConfig(data.level);
       data.cupsCount = config.cups;
       data.initialCoinSlot = Math.floor(Math.random() * config.cups);
       data.swaps = this.generateSwapsList(config.cups, config.swaps);
