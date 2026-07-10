@@ -213,6 +213,7 @@ export class Game {
     this.shieldActive = true;
     this.pizzasLeft = MISS_PIZZAS;
     this.crashed = false;
+    SoundEffects.stopEngine(); // safety: room-mode rounds can restart mid-run
     this.state = "countdown";
     this.countdownTime = 0;
     this.lastCountdownIndex = -1;
@@ -238,6 +239,7 @@ export class Game {
     this.hud.showTokens(true);
     this.hud.hide();
     this.hud.showCountdown(null);
+    SoundEffects.startEngine();
     this.state = "playing";
     this.lastTime = performance.now();
   }
@@ -245,6 +247,7 @@ export class Game {
   private endGame(crashed: boolean): void {
     this.state = "gameover";
     this.crashed = crashed;
+    SoundEffects.stopEngine();
     this.hud.showTokens(false);
     this.hud.showBubble(null);
 
@@ -313,6 +316,7 @@ export class Game {
       const d = this.difficulty(playT);
       const speed = inTutorial ? BASE_SPEED : Math.min(BASE_SPEED + playT * SPEED_RAMP_PER_SEC, MAX_SPEED);
       const dz = speed * dt;
+      SoundEffects.setEngineSpeed((speed - BASE_SPEED) / (MAX_SPEED - BASE_SPEED));
 
       this.scooter.update(dt, this.input.dirX, dz);
       this.street.scroll(dz, dt);

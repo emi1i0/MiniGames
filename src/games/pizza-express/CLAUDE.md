@@ -93,6 +93,14 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
   the leaderboard panel. No throw button (PC-oriented).
 - `game/SoundEffects.ts` — synthesized Web Audio (countdown tick, throw whoosh,
   delivery ding whose pitch rises with the combo, miss blip, crash), no assets.
+  Plus the **2-stroke moped engine loop**: a persistent node graph (two detuned
+  saws at the firing rate + band-passed exhaust noise amplitude-chopped at that
+  same rate + a slow LFO putter), started by `startEngine()` in `startGame`,
+  revved via `setEngineSpeed(t)` each playing tick (t = normalized travel speed,
+  so the pitch climbs with the ramp), and cut by `stopEngine()` in `endGame`
+  (both the crash and the out-of-pizzas endings) and in `beginCountdown` (safety
+  for room-mode round restarts). `setEngineSpeed` skips sub-1.5% changes so the
+  per-frame calls don't flood the automation timeline.
 - `game/toon.ts` — cel-shading helpers: a cached stepped `gradientMap`, `toonMat`
   (a `MeshToonMaterial` factory) and `glowMat` (unlit / additive glow for
   markers, sun, sparks).
