@@ -3,7 +3,7 @@ import { COUNTDOWN_LABELS, COUNTDOWN_STEP, GAME_SERVER_URL } from "./constants";
 import { Hud } from "./Hud";
 import { SocketTransport } from "./SocketTransport";
 import { SoundEffects } from "./SoundEffects";
-import type { WbGameover, WbRejectReason, WbState } from "./WordBombTransport";
+import type { WbEmoteId, WbGameover, WbRejectReason, WbState } from "./WordBombTransport";
 
 type State = "message" | "countdown" | "playing" | "over";
 
@@ -43,6 +43,7 @@ export class Game {
     this.hud = new Hud(root);
     this.hud.onSubmit((word) => this.onSubmitWord(word));
     this.hud.onType((text) => this.transport?.sendTyping(text));
+    this.hud.onEmote((id) => this.transport?.sendEmote(id));
 
     this.room = initRoomMode("word-bomb", {
       getScore: () => this.liveScore(),
@@ -109,6 +110,7 @@ export class Game {
   private startPlaying(): void {
     this.state = "playing";
     this.hud.showStage();
+    this.hud.setEmotesEnabled(true);
     if (this.latest) this.applyState(this.latest);
   }
 
@@ -131,6 +133,7 @@ export class Game {
         this.hud.showTyping(player, text);
       }
     });
+    transport.onEmote((player, emote) => this.onEmote(player, emote));
     transport.onGameover((r) => this.onGameover(r));
     this.transport = transport;
     void transport.connect();
@@ -223,6 +226,18 @@ export class Game {
     if (this.prev.turn !== s.turn && s.phase === "playing") SoundEffects.playTurn();
   }
 
+  /**
+   * Reaccion de cualquier jugador — vivo, eliminado o el de turno. Es puramente
+   * cosmetica: le cambia la cara al personaje por un instante y no toca el estado de
+   * la partida. La propia tambien se pinta con el eco del server (no optimista), asi
+   * lo que ve uno es lo mismo que ven los demas y manda el cooldown del server.
+   */
+  private onEmote(player: string, emote: WbEmoteId): void {
+    if (this.state !== "playing") return;
+    SoundEffects.playEmote(emote);
+    this.hud.showEmote(player, emote);
+  }
+
   private onInvalid(reason: WbRejectReason): void {
     SoundEffects.playReject();
     this.hud.flashReject(REJECT_MESSAGES[reason]);
@@ -238,6 +253,7 @@ export class Game {
     if (this.state === "over") return;
     this.state = "over";
     this.hud.setInputEnabled(false);
+    this.hud.setEmotesEnabled(false);
     this.hud.clearFuse();
 
     const me = this.room?.me ?? "";

@@ -1,3 +1,5 @@
+import type { EmoteId } from "./constants";
+
 let audioCtx: AudioContext | null = null;
 
 function getAudioContext(): AudioContext | null {
@@ -9,17 +11,19 @@ function getAudioContext(): AudioContext | null {
   return audioCtx;
 }
 
+/** `delay` (seg) permite encadenar blips en una frase: una risa son varias silabas. */
 function blip(
   type: OscillatorType,
   freq: number,
   dur: number,
   peak: number,
   slideTo?: number,
+  delay = 0,
 ): void {
   const ctx = getAudioContext();
   if (!ctx) return;
   if (ctx.state === "suspended") ctx.resume();
-  const now = ctx.currentTime;
+  const now = ctx.currentTime + delay;
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.connect(gain);
@@ -55,6 +59,43 @@ export class SoundEffects {
   /** La mecha exploto en el turno de alguien: golpe seco. */
   static playExplode(): void {
     blip("square", 110, 0.28, 0.16, 55);
+  }
+
+  /**
+   * Voz de cada reaccion, sintetizada (sin assets), en la clave cartoon del juego.
+   * Suenan para todos los de la sala y pueden pisarse con la mecha y la explosion,
+   * asi que van a volumen bajo (pico <= 0.09) y cortas (~90ms el "oh!" de sorpresa,
+   * ~430ms el sollozo de llanto, que es la mas larga): son un gesto, no un evento de
+   * la partida. El cooldown de 1s por jugador es lo que evita que se acumulen.
+   */
+  static playEmote(id: EmoteId): void {
+    switch (id) {
+      case "risa":
+        // "ja-ja-ja": tres silabas que caen de tono.
+        blip("triangle", 520, 0.07, 0.07, 430, 0);
+        blip("triangle", 470, 0.07, 0.06, 390, 0.1);
+        blip("triangle", 420, 0.08, 0.05, 350, 0.2);
+        break;
+      case "sorpresa":
+        // Un "oh!" que sube de golpe.
+        blip("sine", 320, 0.13, 0.07, 980);
+        break;
+      case "enojo":
+        // Gruñido grave y aspero.
+        blip("sawtooth", 140, 0.28, 0.09, 70);
+        blip("square", 95, 0.2, 0.04, 62, 0.04);
+        break;
+      case "burla":
+        // Cantito de burla: baja y vuelve a subir.
+        blip("triangle", 600, 0.1, 0.07, 380, 0);
+        blip("triangle", 380, 0.13, 0.07, 640, 0.1);
+        break;
+      case "llanto":
+        // Dos sollozos que se desinflan.
+        blip("sine", 620, 0.22, 0.07, 260, 0);
+        blip("sine", 540, 0.26, 0.06, 220, 0.26);
+        break;
+    }
   }
 
   /** Paso de turno: un tic breve. */
