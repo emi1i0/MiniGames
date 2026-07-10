@@ -40,6 +40,10 @@ export class Street {
   private readonly dirtTex: THREE.CanvasTexture;
   private readonly clusters: THREE.Group[] = [];
   private readonly clouds: { sprite: THREE.Mesh; speed: number }[] = [];
+  // Shared assets for the scrolling ground-detail tufts (one geom + two mats).
+  private readonly tuftGeo = new THREE.IcosahedronGeometry(0.2, 0);
+  private readonly tuftMat = toonMat(COLOR_FOLIAGE, {});
+  private readonly tuftMatDark = toonMat(COLOR_LEAF, {});
 
   constructor() {
     this.roadTex = makeRoadTexture();
@@ -50,7 +54,8 @@ export class Street {
     this.buildSky();
   }
 
-  // --- Ground: road strip + dirt shoulders + grass, all scrolling by UV offset. ---
+  // --- Ground: static grass + scrolling road strip + dirt shoulders. Only the
+  //     road/dirt scroll their UV; the grass stays still (see `scroll`). ---
   private buildGround(): void {
     const grass = new THREE.Mesh(
       new THREE.PlaneGeometry(140, GROUND_LENGTH),
@@ -100,11 +105,31 @@ export class Street {
   private buildCluster(side: number, seed: number): THREE.Group {
     const g = new THREE.Group();
     g.add(this.buildFence(side));
+    g.add(this.buildGroundDetail(side, seed));
 
     const pick = Math.abs(Math.sin(seed * 12.9898) * 43758.5453) % 1;
     if (pick < 0.5) g.add(this.buildHouse(side, seed));
     else if (pick < 0.78) g.add(this.buildTreeClump(side, seed));
     else g.add(this.buildHedgeAndLamp(side, seed));
+    return g;
+  }
+
+  /** A scatter of small grass tufts on the near verge. They scroll with the prop
+   *  pool, so the ground reads as moving via discrete objects flying past instead
+   *  of a sliding texture sheet (see the note in `scroll`). */
+  private buildGroundDetail(side: number, seed: number): THREE.Group {
+    const g = new THREE.Group();
+    const rnd = (n: number) => Math.abs(Math.sin((seed + n) * 91.7) * 4771.31) % 1;
+    for (let i = 0; i < 6; i++) {
+      const x = side * (ROAD_HALF_WIDTH + SHOULDER + 0.25 + rnd(i) * 3.4);
+      const z = -SCENERY_SPACING / 2 + rnd(i + 20) * SCENERY_SPACING;
+      const s = 0.5 + rnd(i + 40) * 0.8;
+      const clump = new THREE.Mesh(this.tuftGeo, rnd(i + 60) < 0.4 ? this.tuftMatDark : this.tuftMat);
+      clump.position.set(x, 0.02 + 0.12 * s, z);
+      clump.scale.set(s, s * 0.65, s);
+      clump.rotation.y = rnd(i + 80) * Math.PI;
+      g.add(clump);
+    }
     return g;
   }
 
@@ -254,8 +279,10 @@ export class Street {
   /** Scrolls the ground textures, wraps the roadside props toward the camera, and
    *  drifts the clouds. `dz` is the world distance travelled this frame. */
   scroll(dz: number, dt: number): void {
+    // Only the road surface scrolls its texture (the moving dashes are the clean
+    // speed cue). The grass stays STILL — a sliding grass sheet looked cheap — and
+    // its motion instead comes from the tufts + props scrolling past it (below).
     this.roadTex.offset.y -= dz / ROAD_TILE;
-    this.grassTex.offset.y -= dz / GRASS_TILE;
     this.dirtTex.offset.y -= dz / GRASS_TILE;
 
     for (const cluster of this.clusters) {
