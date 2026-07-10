@@ -22,7 +22,9 @@ import {
 
 const ROAD_TILE = 11; // world length of one road-texture tile
 const GRASS_TILE = 22;
-const GRASS_WORLD_TILE = 30; // world size of one grass-mottling tile (big = calm)
+// Static meadow decor starts at this |x|, past the outer edge of everything that
+// scrolls (houses reach ~12.5), so the wrapping clusters never pass through it.
+const MEADOW_MIN_X = 13;
 const GROUND_LENGTH = 260;
 const WRAP_AHEAD = SCENERY_SPAN; // how far a passed cluster jumps back
 
@@ -37,32 +39,36 @@ export class Street {
   readonly group = new THREE.Group();
 
   private readonly roadTex: THREE.CanvasTexture;
-  private readonly grassTex: THREE.CanvasTexture;
   private readonly dirtTex: THREE.CanvasTexture;
   private readonly clusters: THREE.Group[] = [];
   private readonly clouds: { sprite: THREE.Mesh; speed: number }[] = [];
-  // Shared assets for the roadside bush border (one geom + two mats).
+  // Shared assets for the bush border + static meadow decor (one geom set, few mats).
   private readonly bushGeo = new THREE.IcosahedronGeometry(0.42, 0);
   private readonly bushMat = toonMat(COLOR_FOLIAGE, {});
   private readonly bushMatDark = toonMat(COLOR_LEAF, {});
+  private readonly trunkGeo = new THREE.CylinderGeometry(0.16, 0.22, 1.2, 7);
+  private readonly trunkMat = toonMat(COLOR_CRUST, {});
 
   constructor() {
     this.roadTex = makeRoadTexture();
-    this.grassTex = makeGrassTexture();
     this.dirtTex = makeDirtTexture();
     this.buildGround();
     this.buildScenery();
+    this.buildMeadow();
     this.buildSky();
   }
 
   // --- Ground: static grass + scrolling road strip + dirt shoulders. Only the
-  //     road/dirt scroll their UV; the grass stays still (see `scroll`). ---
+  //     road/dirt scroll their UV; the grass stays still (see `scroll`). The
+  //     grass is a deliberately FLAT solid green: any texture on it (even big
+  //     soft mottling — tried) gets perceptually dragged along by the motion
+  //     around it and reads as sliding. Featureless, it cannot look like it
+  //     moves; the static meadow decor (`buildMeadow`) carries the stillness. ---
   private buildGround(): void {
     const grass = new THREE.Mesh(
       new THREE.PlaneGeometry(140, GROUND_LENGTH),
       toonMat(COLOR_FOLIAGE, {}),
     );
-    (grass.material as THREE.MeshToonMaterial).map = this.grassTex;
     grass.rotation.x = -Math.PI / 2;
     grass.position.set(0, -0.06, -GROUND_LENGTH / 2 + CAMERA_POS.z);
     this.group.add(grass);
@@ -244,6 +250,54 @@ export class Street {
     return g;
   }
 
+  /** Static little trees + bushes scattered over the still grass, all beyond
+   *  `MEADOW_MIN_X` so the scrolling clusters never intersect them. Fixed in
+   *  world space, they are the landmarks that prove the grass is not moving —
+   *  and being distant-and-still they read naturally as far scenery while the
+   *  near town streams past. */
+  private buildMeadow(): void {
+    const rnd = (n: number) => Math.abs(Math.sin(n * 127.1 + 311.7) * 43758.5453) % 1;
+    let i = 0;
+    for (const side of [-1, 1]) {
+      for (let z = -105; z < 6; z += 4.2 + rnd(i) * 3.8, i++) {
+        // Quadratic bias keeps most props near the visible inner meadow band.
+        const x = side * (MEADOW_MIN_X + Math.pow(rnd(i + 0.3), 2) * 26);
+        const zz = z + rnd(i + 0.7) * 3;
+        if (rnd(i + 0.5) < 0.45) {
+          this.group.add(this.buildMeadowTree(x, zz, 0.85 + rnd(i + 0.9) * 0.6));
+        } else {
+          const s = 1.1 + rnd(i + 1.3) * 1.3;
+          const bush = new THREE.Mesh(this.bushGeo, rnd(i + 1.7) < 0.35 ? this.bushMatDark : this.bushMat);
+          bush.position.set(x, 0.16 * s, zz);
+          bush.scale.set(s, s * 0.85, s);
+          bush.rotation.y = rnd(i + 2.1) * Math.PI;
+          this.group.add(bush);
+        }
+      }
+    }
+  }
+
+  /** A lighter tree than `buildTree` (shared geometry + materials) for the
+   *  meadow scatter, which places a few dozen of them. */
+  private buildMeadowTree(x: number, z: number, scale: number): THREE.Group {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(this.trunkGeo, this.trunkMat);
+    trunk.position.set(x, 0.6 * scale, z);
+    trunk.scale.setScalar(scale);
+    g.add(trunk);
+    for (const [dx, dy, r, dark] of [
+      [0, 1.55, 2.2, false],
+      [-0.45, 1.15, 1.6, true],
+      [0.5, 1.25, 1.5, false],
+    ] as const) {
+      const blob = new THREE.Mesh(this.bushGeo, dark ? this.bushMatDark : this.bushMat);
+      blob.position.set(x + dx * scale, dy * scale, z);
+      blob.scale.setScalar(r * scale);
+      g.add(blob);
+    }
+    return g;
+  }
+
   private buildSky(): void {
     const skyTex = makeSkyTexture();
     const sky = new THREE.Mesh(
@@ -332,69 +386,6 @@ function makeRoadTexture(): THREE.CanvasTexture {
   tex.wrapS = THREE.RepeatWrapping;
   tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(1, GROUND_LENGTH / ROAD_TILE);
-  return tex;
-}
-
-function makeGrassTexture(): THREE.CanvasTexture {
-  // The grass is deliberately STATIC while everything around it scrolls, so its
-  // pattern must make that stillness *visible*: big, soft, meters-wide mottling
-  // the eye can lock onto. Fine uniform speckle (the old texture) gives no such
-  // anchor — surrounded by motion it gets perceptually dragged along ("motion
-  // capture" illusion) and the grass looks like it slides with the road. So:
-  // low-frequency blotches only, no high-frequency noise (which also shimmers).
-  const s = 256;
-  const canvas = document.createElement("canvas");
-  canvas.width = s;
-  canvas.height = s;
-  const ctx = canvas.getContext("2d")!;
-  ctx.fillStyle = "#4f8a3a";
-  ctx.fillRect(0, 0, s, s);
-
-  // Draws a soft radial blob wrapped across the tile edges (seamless repeat).
-  const blob = (x: number, y: number, r: number, rgba: string) => {
-    for (const ox of [-s, 0, s]) {
-      for (const oy of [-s, 0, s]) {
-        const g = ctx.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r);
-        g.addColorStop(0, rgba);
-        g.addColorStop(1, "rgba(0,0,0,0)");
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.arc(x + ox, y + oy, r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    }
-  };
-
-  // Large sun-warmed / shaded patches (~5-11 world units across at the repeat
-  // below) — the static landmarks.
-  for (let i = 0; i < 12; i++) {
-    blob(Math.random() * s, Math.random() * s, s * (0.16 + Math.random() * 0.14), "rgba(126,172,74,0.42)");
-  }
-  for (let i = 0; i < 12; i++) {
-    blob(Math.random() * s, Math.random() * s, s * (0.14 + Math.random() * 0.13), "rgba(46,92,36,0.44)");
-  }
-  // A second, smaller octave for nearby richness — still soft, never speckle.
-  for (let i = 0; i < 30; i++) {
-    const light = Math.random() < 0.5;
-    blob(
-      Math.random() * s,
-      Math.random() * s,
-      s * (0.04 + Math.random() * 0.05),
-      light ? "rgba(138,182,84,0.30)" : "rgba(54,100,40,0.32)",
-    );
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  // Anisotropic filtering keeps the blotches readable at the camera's grazing
-  // angle (plain trilinear mips wash them flat a few meters out). THREE clamps
-  // the value to the hardware max.
-  tex.anisotropy = 8;
-  // Big world tile so the blotches read at meter scale (small tiles turn them
-  // back into shimmery noise).
-  tex.repeat.set(140 / GRASS_WORLD_TILE, GROUND_LENGTH / GRASS_WORLD_TILE);
   return tex;
 }
 

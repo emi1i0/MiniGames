@@ -36,15 +36,18 @@ the road surface is `y = 0`. The scooter only moves in **X** (steering).
 - `game/Street.ts` — the environment: the **road + dirt shoulders** scroll their
   canvas-texture UV for an endless surface (the moving dashes are the speed cue),
   while the **grass stays still** (a sliding grass sheet looked cheap — flat green
-  detail moving reads as the surface itself sliding). For the stillness to
-  actually *read*, the grass texture is **big soft low-frequency mottling** (meter-
-  scale light/dark patches, drawn edge-wrapped so the tile stays seamless, with
-  anisotropic filtering so they survive the grazing camera angle) and **no fine
-  speckle**: a featureless or fine-noise grass has no landmark the eye can lock
-  onto, so the surrounding motion perceptually drags it along ("motion capture"
-  illusion) and the static grass *looks* like it slides with the road — that was
-  the bug behind "el pasto se mueve" reports, not any actual scrolling. Besides,
-  a broken row of
+  detail moving reads as the surface itself sliding). The grass is a **flat solid
+  green with no texture at all**: any pattern on it — fine speckle and big soft
+  mottling were both tried — has no stable landmark at the grazing camera angle,
+  so the surrounding motion perceptually drags it along ("motion capture"
+  illusion) and the static grass *looks* like it slides with the road; that
+  illusion, not any actual scrolling, was the bug behind "el pasto se mueve".
+  Featureless, the surface cannot read as moving, and the stillness is instead
+  carried by `buildMeadow`: **static little trees + bushes** (shared geometry /
+  materials) scattered over the grass at `|x| >= MEADOW_MIN_X` (13) — past the
+  outer edge of everything that scrolls, so the wrapping clusters never pass
+  through them — whose fixed silhouettes are the proof the ground stands still
+  (and, being still, they read naturally as far scenery). Besides, a broken row of
   raised **bushes** (`buildHedgeBorder`) runs along the road/grass boundary as a
   clear **separation**; being distinct 3-D clumps with gaps, they read as objects
   *passing* as they scroll, and together with the **wrapping pool** of roadside
