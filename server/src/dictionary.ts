@@ -1,16 +1,18 @@
 import { createRequire } from "node:module";
 import { EXTRA_WORDS } from "./extra-words.js";
+import { PLACES } from "./places.js";
 
 /**
  * Diccionario de espanol embebido en el server (an-array-of-spanish-words:
- * ~636k palabras) mas las palabras extra de `extra-words.ts`. Vive SOLO aca: la
- * validacion de palabras es autoritativa y no spoofeable, y el diccionario nunca
- * pesa en el bundle del front.
+ * ~636k palabras) mas las palabras extra de `extra-words.ts` (jerga) y los
+ * toponimos de `places.ts` (paises, capitales, provincias y ciudades). Vive SOLO
+ * aca: la validacion de palabras es autoritativa y no spoofeable, y el diccionario
+ * nunca pesa en el bundle del front.
  *
  * Se carga con createRequire porque el paquete es un index.json plano (un array
  * de strings), mas robusto que un import JSON con attributes en ESM. Para agregar
- * palabras que el diccionario base no trae, editar `extra-words.ts` (no hace
- * falta tocar este archivo).
+ * palabras que el diccionario base no trae, editar `extra-words.ts` o `places.ts`
+ * (no hace falta tocar este archivo).
  */
 const require = createRequire(import.meta.url);
 const RAW: string[] = require("an-array-of-spanish-words");
@@ -76,7 +78,8 @@ function ingest(raw: string, counts: Map<string, number>): void {
 function build(): void {
   const counts = new Map<string, number>();
   for (const raw of RAW) ingest(raw, counts);
-  for (const raw of EXTRA_WORDS) ingest(raw, counts); // palabras extra editables
+  for (const raw of EXTRA_WORDS) ingest(raw, counts); // jerga y regionalismos
+  for (const raw of PLACES) ingest(raw, counts); // paises, capitales y ciudades
   for (const [frag, n] of counts) {
     if (n >= MIN_WORDS_PER_FRAGMENT) FRAGMENTS.push(frag);
   }

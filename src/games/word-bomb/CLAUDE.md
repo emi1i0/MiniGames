@@ -151,7 +151,10 @@ duplicados a proposito, ver Gotchas). Requiere redeploy del server.
 ## Diccionario y fragmentos (server-side)
 
 `server/src/dictionary.ts` carga `an-array-of-spanish-words` (~636k palabras)
-**mas las palabras extra de `server/src/extra-words.ts`**, normaliza (minuscula,
+**mas las palabras extra de `server/src/extra-words.ts` y los toponimos de
+`server/src/places.ts`** (paises, capitales y ciudades, agregados para Cadena de
+Palabras y compartidos con este juego: sumaron el fragmento jugable `air`),
+normaliza (minuscula,
 saca acentos de vocales y dieresis pero **conserva la ñ**, descarta lo que no sea
 `[a-zñ]`) y **precomputa los fragmentos jugables**: todas las subcadenas de 2-3
 letras que existen en al menos `MIN_WORDS_PER_FRAGMENT` (500) palabras (~1800
@@ -161,7 +164,8 @@ partida).
 
 **Agregar palabras**: editar el array `EXTRA_WORDS` en
 `server/src/extra-words.ts` (jerga, regionalismos, terminos que el diccionario
-base no trae). Se normalizan y suman igual que el resto via el helper `ingest`;
+base no trae) o `PLACES` en `server/src/places.ts` (toponimos). Se normalizan y
+suman igual que el resto via el helper `ingest`;
 sumar palabras las hace **validas como respuesta** pero no crea fragmentos nuevos
 (eso depende de `MIN_WORDS_PER_FRAGMENT`; una lista corta no llega al umbral).
 El diccionario se arma al arrancar el proceso, asi que **hay que redeployar el

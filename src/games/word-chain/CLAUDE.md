@@ -134,12 +134,22 @@ al allowlist `EMOTES` de `server/src/games/wordchain.ts` **y** al tipo `WcEmoteI
 ## Diccionario (server-side)
 
 Comparte `server/src/dictionary.ts` con Bomba Palabra (`an-array-of-spanish-words`, ~637k
-palabras, mas `extra-words.ts`). Este juego usa `randomInitial()` / `hasInitial()` /
-`checkChainWord()`; los fragmentos (`randomFragment`) son de Bomba. Una palabra es valida si
-(empieza con la letra) + (esta en el diccionario) + (no se uso antes en la partida).
+palabras, mas `extra-words.ts` y `places.ts`). Este juego usa `randomInitial()` /
+`hasInitial()` / `checkChainWord()`; los fragmentos (`randomFragment`) son de Bomba. Una
+palabra es valida si (empieza con la letra) + (esta en el diccionario) + (no se uso antes en
+la partida).
 
-**Agregar palabras**: editar `EXTRA_WORDS` en `server/src/extra-words.ts`. El diccionario se
-arma al arrancar el proceso, asi que **hay que redeployar el server en Railway** tras editar.
+**Paises y ciudades**: viven en `server/src/places.ts` (~600 entradas). Hay que tenerlos
+porque en este juego los lugares aparecen todo el tiempo (se arranca en una letra, no en una
+silaba) y el corpus base solo aceptaba los que **por casualidad** son palabra comun (`chile`
+el aji, `lima` la fruta, `salta` y `quito` verbos), rechazando `mexico`, `uruguay` o
+`mendoza`. Los compuestos se **concatenan** al normalizar: "antigua y barbuda" ->
+"antiguaybarbuda", y su ultima letra (`a`) es la que hereda el siguiente. Ojo que la palabra
+que queda bajo el avatar es la **normalizada**, o sea sin espacios ("BUENOSAIRES").
+
+**Agregar palabras**: editar `EXTRA_WORDS` en `server/src/extra-words.ts` (jerga) o `PLACES`
+en `server/src/places.ts` (toponimos). El diccionario se arma al arrancar el proceso, asi que
+**hay que redeployar el server en Railway** tras editar.
 
 ## Gotchas
 

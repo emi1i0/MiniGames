@@ -151,6 +151,15 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   diccionario base no trae (jerga, regionalismos). Se suman al set igual que el
   resto; requiere redeploy del server. Para agregar palabras se toca solo este
   archivo.
+- `src/places.ts` — array `PLACES`: paises, capitales, provincias argentinas y
+  ciudades conocidas (~600). El corpus base es de lexico comun y aceptaba los
+  toponimos que **por casualidad** son palabra comun (`chile` el aji, `lima` la
+  fruta, `salta` y `quito` verbos, `argentina` adjetivo) y rechazaba el resto
+  (`mexico`, `uruguay`, `madrid`), lo que en la mesa es indistinguible de un bug.
+  Los nombres compuestos se **concatenan** al normalizar (`buenos aires` ->
+  `buenosaires`), asi que se aciertan con o sin espacio. Nada de `ã` ni letras que
+  la normalizacion borre (dejarian la palabra mutilada). Se ingiere junto con
+  `EXTRA_WORDS`; requiere redeploy.
 - `src/games/wordbomb.ts` — `WordBombSim`: turnos, mecha (deadline absoluto),
   vidas, palabras usadas, validacion y orden de eliminacion. Difunde `wb:state`
   en cada cambio; el cliente anima la mecha localmente entre snapshots. Ademas
