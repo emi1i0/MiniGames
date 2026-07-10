@@ -94,7 +94,7 @@ Mirá cualquier carpeta de `src/games/<id>/` como referencia: cada una trae su p
 1. Hacé un **fork** del repo.
 2. Creá una rama para tu juego (`git checkout -b mi-juego`).
 3. Desarrollá, probá con `npm run build` y hacé commit.
-4. Abrí un **Pull Request** describiendo tu juego.
+4. Abrí un **Pull Request** describiendo tu juego en la rama develop.
 
 ¿Dudas o ideas? Abrí un **Issue** para charlarlo antes de arrancar. Toda contribución suma. ¡Gracias por jugar y por construir!
 
