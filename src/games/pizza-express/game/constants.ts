@@ -73,9 +73,11 @@ export const MAILBOX_ACTIVE = 6;
 // short so throwing is a Paperboy-style lob as a customer comes alongside, not a
 // long-range snipe.
 export const THROW_RANGE_Z = 18;
-// A mailbox counts as "missed" (breaks the combo) once it passes this Z
-// undelivered — a little ahead of the scooter so a late throw still lands.
-export const MAILBOX_MISS_Z = 3.5;
+// Z past which a mailbox is considered "passed": it stops being a valid throw
+// target (you can't score a box you already rode by — targeting moves to the next
+// one ahead) and, if still pending, is marked missed (breaks the combo). Kept
+// right at the scooter (~alongside) so you must serve it while it's ahead of you.
+export const MAILBOX_MISS_Z = 0.5;
 
 // --- Throwing pizzas ---
 export const THROW_COOLDOWN = 0.22; // seconds between throws
