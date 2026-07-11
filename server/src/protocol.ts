@@ -310,3 +310,122 @@ export interface BtServerToClient {
   "bt:you": (msg: { answers: Partial<Record<BtCategoryId, string>> }) => void;
   "bt:gameover": (msg: BtGameover) => void;
 }
+
+/* ========================== IMPOSTOR (namespace /impostor) ========================== */
+
+/**
+ * Contrato de mensajes socket.io de Impostor (namespace `/impostor`).
+ *
+ * Deduccion social: a todos menos al/los impostor/es se les muestra en PRIVADO la misma
+ * palabra secreta y su categoria; el impostor solo ve la categoria (sabe que es impostor,
+ * no la palabra). Por turnos cada uno escribe UNA palabra-pista relacionada; todos las ven.
+ * Despues se VOTA quien es el impostor. Si el mas votado es un impostor, tiene una chance de
+ * ADIVINAR la palabra para robar la ronda. Un partido son varias rondas; gana el de mas puntos.
+ *
+ * Como Basta, el server arbitra todo el flujo (fases + deadlines con setTimeout propio) y NO
+ * usa el diccionario. El rol (palabra / impostor) viaja SOLO por el evento dirigido `im:you`,
+ * nunca en el broadcast `im:state`, para que no se pueda espiar quien es el impostor.
+ */
+
+export type ImPhase = "waiting" | "reveal" | "clues" | "voting" | "guess" | "result" | "over";
+
+/** Vista publica de un jugador (nunca revela su rol). */
+export interface ImPlayerView {
+  nickname: string;
+  connected: boolean;
+  /** Puntaje acumulado del partido. */
+  total: number;
+  /** Ya dio su pista en la ronda de pistas (solo en clues). */
+  clued: boolean;
+  /** Ya voto (solo en voting; no revela a quien). */
+  voted: boolean;
+}
+
+/** Una pista dada, en orden de turno. */
+export interface ImClue {
+  player: string;
+  word: string;
+}
+
+/** Un voto crudo (se revela en voting/result; el cliente cuenta y deriva el propio). */
+export interface ImVoteView {
+  voter: string;
+  target: string;
+}
+
+export type ImOutcomeKind = "impostor-survived" | "impostor-guessed" | "impostor-caught";
+
+/** Resumen de la ronda (solo en result). */
+export interface ImOutcome {
+  kind: ImOutcomeKind;
+  /** Que escribio el impostor al intentar adivinar, o null. */
+  guess: string | null;
+  /** Puntos ganados esta ronda por jugador. */
+  scores: { player: string; points: number }[];
+  winners: "impostores" | "inocentes";
+}
+
+/** Snapshot que el server difunde en cada cambio. NUNCA incluye roles ni la palabra
+ *  salvo en `result` (donde ya termino la ronda y se puede revelar). */
+export interface ImState {
+  phase: ImPhase;
+  /** Ronda actual (1-based) y total del partido. */
+  round: number;
+  totalRounds: number;
+  /** Categoria de la palabra secreta (visible a todos, incluido el impostor). */
+  category: string | null;
+  /** Fin de la fase actual en epoch ms, o null. */
+  deadline: number | null;
+  /** Ms restantes de la fase al broadcast; el cliente los ancla a performance.now(). */
+  clockMs: number | null;
+  clockTotalMs: number | null;
+  players: ImPlayerView[];
+  /** Nickname del jugador de turno en clues, o null. */
+  turn: string | null;
+  /** Pistas dadas hasta ahora en la ronda, en orden de turno. */
+  clues: ImClue[];
+  /** Votos crudos (solo en voting/result; null si no). */
+  votes: ImVoteView[] | null;
+  /** Impostor/es revelado/s (solo en result). */
+  impostors: string[] | null;
+  /** Palabra secreta revelada (solo en result). */
+  word: string | null;
+  /** Acusado = mas votado (solo en guess/result; null si empate o nadie). */
+  accused: string | null;
+  /** Resumen de la ronda (solo en result). */
+  outcome: ImOutcome | null;
+}
+
+export interface ImGameover {
+  ranking: { nickname: string; place: number; total: number }[];
+}
+
+/** Rol privado que recibe cada jugador al empezar la ronda (y al reconectar). */
+export interface ImYou {
+  round: number;
+  impostor: boolean;
+  /** La palabra secreta si es inocente; null si es impostor. */
+  word: string | null;
+  category: string;
+  /** Los otros impostores (solo si es impostor y hay 2). */
+  mates: string[];
+}
+
+/** Cliente -> Server. */
+export interface ImClientToServer {
+  "im:join": (msg: { code: string; nickname: string; roster: string[] }) => void;
+  /** Pista del jugador de turno (una palabra). El server valida que sea su turno. */
+  "im:clue": (msg: { word: string }) => void;
+  /** Voto de quien cree que es el impostor (cambiable hasta cerrar). */
+  "im:vote": (msg: { target: string }) => void;
+  /** Intento de adivinar la palabra (solo el impostor acusado, en guess). */
+  "im:guess": (msg: { word: string }) => void;
+}
+
+/** Server -> Cliente. */
+export interface ImServerToClient {
+  "im:state": (state: ImState) => void;
+  /** Dirigido: el rol privado del jugador (palabra o impostor). No viaja en im:state. */
+  "im:you": (msg: ImYou) => void;
+  "im:gameover": (msg: ImGameover) => void;
+}

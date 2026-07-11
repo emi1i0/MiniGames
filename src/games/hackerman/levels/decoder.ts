@@ -33,6 +33,7 @@ export class DecoderLevel implements HackLevel {
   private codeEl!: HTMLDivElement;
   private gridEl!: HTMLDivElement;
   private barEl!: HTMLDivElement;
+  private timerEl!: HTMLDivElement;
   private cells: HTMLDivElement[] = [];
 
   private grid: string[][] = [];
@@ -52,17 +53,56 @@ export class DecoderLevel implements HackLevel {
   mount(host: HTMLElement): void {
     host.innerHTML = "";
 
-    const wrap = document.createElement("div");
-    wrap.className = "dec";
+    const container = document.createElement("div");
+    container.className = "gta-container";
 
-    const banner = document.createElement("div");
-    banner.className = "dec__banner";
-    banner.textContent = "CONECTANDO AL HOST — SECUENCIA REQUERIDA";
+    // Top Blue Bar
+    const topBar = document.createElement("div");
+    topBar.className = "gta-blue-bar";
+
+    // Header
+    const header = document.createElement("div");
+    header.className = "gta-header";
+
+    const left = document.createElement("div");
+    left.className = "gta-header__left";
+    const lockIcon = document.createElement("div");
+    lockIcon.className = "gta-lock-icon";
+    const texts = document.createElement("div");
+    texts.className = "gta-header__texts";
+    const title = document.createElement("div");
+    title.className = "gta-header__title";
+    title.textContent = "CONNECTING TO THE HOST";
+    const subtitle = document.createElement("div");
+    subtitle.className = "gta-header__subtitle";
+    subtitle.textContent = "COMPROMISING GLOBAL SECURITY ONE SLIP AT A TIME";
+    texts.append(title, subtitle);
+    left.append(lockIcon, texts);
+
+    const right = document.createElement("div");
+    right.className = "gta-header__right";
+    this.timerEl = document.createElement("div");
+    this.timerEl.className = "gta-header__timer";
+    this.timerEl.textContent = "00:00:000";
+    
+    const signal = document.createElement("div");
+    signal.className = "gta-signal active";
+    for (let i = 0; i < 5; i++) {
+      const bar = document.createElement("div");
+      bar.className = "gta-signal__bar";
+      signal.appendChild(bar);
+    }
+    right.append(this.timerEl, signal);
+    header.append(left, right);
+
+    // Main Body
+    const decBody = document.createElement("div");
+    decBody.className = "dec-body";
 
     this.codeEl = document.createElement("div");
     this.codeEl.className = "dec__code";
 
-    // Barra de "reorganizacion": se vacia hasta que la grilla se baraja.
+    // Scramble bar
     const scramble = document.createElement("div");
     scramble.className = "dec__scramble";
     const scrambleLabel = document.createElement("span");
@@ -79,8 +119,14 @@ export class DecoderLevel implements HackLevel {
     this.gridEl.className = "dec__grid";
     this.gridEl.style.setProperty("--cols", String(COLS));
 
-    wrap.append(banner, this.codeEl, scramble, this.gridEl);
-    host.appendChild(wrap);
+    decBody.append(this.codeEl, scramble, this.gridEl);
+
+    // Bottom Blue Bar
+    const bottomBar = document.createElement("div");
+    bottomBar.className = "gta-blue-bar";
+
+    container.append(topBar, header, decBody, bottomBar);
+    host.appendChild(container);
   }
 
   begin(): void {
@@ -91,7 +137,6 @@ export class DecoderLevel implements HackLevel {
   }
 
   private newCode(): void {
-    // Codigo objetivo nuevo.
     this.code = [];
     for (let i = 0; i < CODE_LEN; i++) this.code.push(two(Math.floor(Math.random() * 100)));
 
@@ -105,7 +150,6 @@ export class DecoderLevel implements HackLevel {
     this.updateStatus();
   }
 
-  /** Rellena la grilla con numeros random y planta `this.code` en una fila al azar. */
   private plantGrid(): void {
     this.grid = [];
     for (let r = 0; r < ROWS; r++) {
@@ -118,7 +162,6 @@ export class DecoderLevel implements HackLevel {
     for (let i = 0; i < CODE_LEN; i++) this.grid[plantRow][plantCol + i] = this.code[i];
   }
 
-  /** Direcciones de deslizamiento: [dRow, dCol, claseCSS de la animacion]. */
   private static readonly SHIFTS: [number, number, string][] = [
     [0, -1, "left"],
     [0, 1, "right"],
@@ -126,11 +169,6 @@ export class DecoderLevel implements HackLevel {
     [1, 0, "down"],
   ];
 
-  /**
-   * La grilla se desliza una celda en una direccion al azar (wrap toroidal): los
-   * mismos numeros se corren, arrastrando el codigo. El cursor NO se mueve (queda
-   * en su lugar mientras el tablero pasa por debajo).
-   */
   private scramble(): void {
     const [dRow, dCol, cls] = DecoderLevel.SHIFTS[Math.floor(Math.random() * 4)];
     const next: string[][] = [];
@@ -148,21 +186,29 @@ export class DecoderLevel implements HackLevel {
       for (let c = 0; c < COLS; c++) this.cells[r * COLS + c].textContent = this.grid[r][c];
     }
     this.renderCursor();
-    // Nudge direccional para que se lea el sentido del movimiento.
     this.gridEl.classList.remove("shift-left", "shift-right", "shift-up", "shift-down");
-    void this.gridEl.offsetWidth; // reflow para reiniciar la animacion
+    void this.gridEl.offsetWidth;
     this.gridEl.classList.add(`shift-${cls}`);
     SoundEffects.playCycle();
   }
 
   update(dt: number): void {
-    if (this.busy) return; // durante el flash de acierto/error no corre el reloj
+    if (this.busy) return;
     this.scrambleLeft -= dt;
     if (this.scrambleLeft <= 0) {
       this.scrambleLeft = SCRAMBLE_SEC;
       this.scramble();
     }
     this.barEl.style.width = `${Math.max(0, (this.scrambleLeft / SCRAMBLE_SEC) * 100)}%`;
+  }
+
+  updateTime(centis: number): void {
+    if (this.timerEl) {
+      const min = Math.floor(centis / 6000);
+      const sec = Math.floor((centis % 6000) / 100);
+      const ms = (centis % 100) * 10;
+      this.timerEl.textContent = `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}:${ms.toString().padStart(3, "0")}`;
+    }
   }
 
   private renderCode(): void {
@@ -191,8 +237,6 @@ export class DecoderLevel implements HackLevel {
         cell.textContent = this.grid[r][c];
         const rr = r;
         const cc = c;
-        // Click = poner el arranque de la ventana ahi y validar (bueno para touch).
-        // La ventana envuelve el borde, asi que cualquier columna es valida.
         cell.addEventListener("click", () => {
           this.cursorRow = rr;
           this.cursorCol = cc;
@@ -209,7 +253,6 @@ export class DecoderLevel implements HackLevel {
     for (let r = 0; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         const cell = this.cells[r * COLS + c];
-        // La ventana da la vuelta: distancia hacia adelante desde el cursor (mod COLS).
         const fwd = (c - this.cursorCol + COLS) % COLS;
         const inWindow = r === this.cursorRow && fwd < CODE_LEN;
         cell.classList.toggle("is-window", inWindow);
@@ -219,7 +262,6 @@ export class DecoderLevel implements HackLevel {
   }
 
   private moveCursor(dr: number, dc: number): void {
-    // Loop toroidal: al salir por un borde entra por el opuesto.
     this.cursorRow = (this.cursorRow + dr + ROWS) % ROWS;
     this.cursorCol = (this.cursorCol + dc + COLS) % COLS;
     this.renderCursor();
@@ -230,7 +272,6 @@ export class DecoderLevel implements HackLevel {
     if (this.busy) return;
     let match = true;
     for (let i = 0; i < CODE_LEN; i++) {
-      // La ventana envuelve el borde (estilo loop).
       if (this.grid[this.cursorRow][(this.cursorCol + i) % COLS] !== this.code[i]) {
         match = false;
         break;
@@ -239,10 +280,9 @@ export class DecoderLevel implements HackLevel {
 
     if (match) {
       SoundEffects.playLock();
-      // Marcar la corrida acertada (envuelve el borde).
       for (let i = 0; i < CODE_LEN; i++) {
-        const c = (this.cursorCol + i) % COLS;
-        this.cells[this.cursorRow * COLS + c].classList.add("is-hit");
+        const idx = this.cursorRow * COLS + ((this.cursorCol + i) % COLS);
+        this.cells[idx].classList.add("is-hit");
       }
       this.solved++;
       this.ctx.onProgress();
@@ -261,13 +301,13 @@ export class DecoderLevel implements HackLevel {
       SoundEffects.playError();
       this.busy = true;
       for (let i = 0; i < CODE_LEN; i++) {
-        const c = (this.cursorCol + i) % COLS;
-        this.cells[this.cursorRow * COLS + c].classList.add("is-miss");
+        const idx = this.cursorRow * COLS + ((this.cursorCol + i) % COLS);
+        this.cells[idx].classList.add("is-miss");
       }
       this.wrongTimer = window.setTimeout(() => {
         for (let i = 0; i < CODE_LEN; i++) {
-          const c = (this.cursorCol + i) % COLS;
-          this.cells[this.cursorRow * COLS + c]?.classList.remove("is-miss");
+          const idx = this.cursorRow * COLS + ((this.cursorCol + i) % COLS);
+          this.cells[idx]?.classList.remove("is-miss");
         }
         this.busy = false;
         this.wrongTimer = null;

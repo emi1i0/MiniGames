@@ -109,8 +109,8 @@ export class Hud {
 
   hideOverlay(): void {
     this.overlayEl.classList.add("hidden");
-    this.hudBar.classList.remove("hidden");
-    this.levelInfo.classList.remove("hidden");
+    this.hudBar.classList.add("hidden");
+    this.levelInfo.classList.add("hidden");
     this.stageEl.classList.remove("hidden");
   }
 

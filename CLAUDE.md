@@ -1,6 +1,6 @@
 # MiniGames
 
-Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Basta, Hole in None, Cannon Dodge and Pizza Express), each independently playable — except Bomba Palabra, Cadena de Palabras and Basta, which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
+Monorepo of small browser minigames (Neon Cylinder, Flappy Bird, Stack Tower, Rhythm Tap, Jump Ball, Reaction Time, City Bloxx, Sliding Puzzle, Asteroids, Mini Frogger, Neon Drift, Odd One Out, Dunk Shot, Memoria, Kunai Throw, Keepers!, Western Shoot, Barra Libre, Crono Ciego, El Trile, PONG, Block Paddle, Simon, Topos, Snake, Ta-Te-Ti, Conecta 4, Mecano, Final Sentence, Neon Sawblades, Space Rush, Lights Out, Boilerbound, Timber!, Puerco Araña, Circuit Breaker, Ring Runner, Pulso de Acero, Memoria de Color, Al Centro, Bomba Palabra, Cadena de Palabras, Basta, Impostor, Hole in None, Cannon Dodge and Pizza Express), each independently playable — except Bomba Palabra, Cadena de Palabras, Basta and Impostor, which are **rooms-only** (they need a multiplayer room and the game server; see "Game server" below) — plus a landing page to pick one. (Rocket SpaceX / `rocket-arena` still lives in the repo but is hidden from the roster via `hidden: true` in its `meta.ts` due to errors.) Stack: Vite + TypeScript, no framework. Deployed as a static site (Vercel), plus a separate Node game server (`server/`) on Railway for the real-time / server-authoritative games.
 
 ## Conventions (must follow)
 
@@ -131,8 +131,9 @@ Supabase sigue siendo la fuente de verdad de lobby / marcador / rejoin; el serve
 solo maneja el **estado en-ronda en memoria** y **no toca la DB**. Plan de fondo:
 `docs/server-realtime-plan.md`. **En uso: Bomba Palabra** (`word-bomb`, validacion
 por turnos), **Cadena de Palabras** (`word-chain`, fork de Bomba con otra mecanica),
-**PONG** (`pong`, fisica de tiempo real / PvP 1v1) **y Basta** (`basta`, Tutti Frutti
-por votacion, sin diccionario).
+**PONG** (`pong`, fisica de tiempo real / PvP 1v1), **Basta** (`basta`, Tutti Frutti
+por votacion, sin diccionario) **e Impostor** (`impostor`, deduccion social: roles privados,
+pistas por turno y votacion, sin diccionario).
 
 Estructura de `server/` (paquete propio, aislado del build de Vite, con su propio
 `package.json` / `tsconfig.json` / `node_modules`, gitignoreado):
@@ -146,7 +147,7 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   `dispose`). Para agregar otro juego server-side se implementa un `RoomSim` y se
   llama `registerGame` en su propio namespace.
 - `src/protocol.ts` — tipos de mensajes (por juego: `wb:*` de Bomba Palabra,
-  `wc:*` de Cadena de Palabras, `pg:*` de PONG, `bt:*` de Basta). **Se duplican en el cliente**
+  `wc:*` de Cadena de Palabras, `pg:*` de PONG, `bt:*` de Basta, `im:*` de Impostor). **Se duplican en el cliente**
   (p.ej. `src/games/word-bomb/game/WordBombTransport.ts`,
   `src/games/word-chain/game/WordChainTransport.ts` y
   `src/games/pong/game/PongProtocol.ts`) por la regla de decoupling (no se
@@ -164,6 +165,11 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   diccionario base no trae (jerga, regionalismos). Se suman al set igual que el
   resto; requiere redeploy del server. Para agregar palabras se toca solo este
   archivo.
+- `src/words-impostor.ts` — array `WORD_CATEGORIES`: banco de palabras secretas de Impostor,
+  agrupadas por categoria (Comida, Animal, Lugar, ...). Palabras concretas y adivinables; la
+  categoria es una pista deliberada, asi que las de una categoria se distinguen entre si.
+  `pickWord(exclude)` sortea sin repetir en el partido. Vive solo en el server (no pesa en el
+  bundle) y **no** usa el diccionario; requiere redeploy al editarlo.
 - `src/places.ts` — array `PLACES`: paises, capitales, provincias argentinas y
   ciudades conocidas (~600). El corpus base es de lexico comun y aceptaba los
   toponimos que **por casualidad** son palabra comun (`chile` el aji, `lima` la
@@ -200,16 +206,23 @@ Estructura de `server/` (paquete propio, aislado del build de Vite, con su propi
   (`bt:vote`, tumba con mayoria de los demas) y computa el puntaje (unica 100 / repetida
   50 / vacia o tumbada 0). Difunde `bt:state`; devuelve la hoja propia con `bt:you` al
   reconectar (F5 en el llenado). Un partido son 3 letras. Ver el `CLAUDE.md` de `basta`.
+- `src/games/impostor.ts` — `ImpostorSim`: deduccion social. Sortea categoria + palabra
+  (`words-impostor.ts`), reparte roles (2 impostores con 7+ jugadores, si no 1) y corre las fases
+  (`reveal` -> `clues` por turnos -> `voting` -> `guess` condicional -> `result`) con `setTimeout`
+  propio. El rol (palabra / impostor) viaja SOLO por el evento dirigido `im:you`, nunca en el
+  broadcast `im:state` (no espiable); tambien se reenvia al reconectar (F5). Recolecta pistas
+  (`im:clue`), votos (`im:vote`) y la adivinanza del acusado (`im:guess`), y computa el puntaje por
+  equipo (impostor gana 3, inocente 2). Un partido son 3 rondas. Ver el `CLAUDE.md` de `impostor`.
 
 Cliente: env `VITE_GAME_SERVER_URL` (documentada en `.env.example`). El juego
 carga `socket.io-client` con **import dinamico** (no pesa en los juegos que no lo
 usan). **Degradacion:** depende del juego. PONG degrada con gracia: sin
 `VITE_GAME_SERVER_URL` la sala cae a un partido local vs IA por jugador (y solo
-sigue siendo 1 jugador en la landing). Bomba Palabra, Cadena de Palabras y Basta
+sigue siendo 1 jugador en la landing). Bomba Palabra, Cadena de Palabras, Basta e Impostor
 **no** pueden: existen por el server (en Bomba/Cadena porque el diccionario vive ahi;
-en Basta porque el server arbitra las fases, los votos y el puntaje), asi que sin
-`VITE_GAME_SERVER_URL` muestran "no disponible" (excepcion deliberada y
-documentada a la regla de degradacion del repo).
+en Basta e Impostor porque el server arbitra las fases, los votos y el puntaje —y en Impostor
+tambien reparte los roles privados), asi que sin `VITE_GAME_SERVER_URL` muestran "no disponible"
+(excepcion deliberada y documentada a la regla de degradacion del repo).
 
 Comandos del server (dentro de `server/`): `npm run dev` (tsx watch),
 `npm run build` (tsc -> `dist/`), `npm start` (`node dist/index.js`). Deploy

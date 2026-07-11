@@ -197,9 +197,13 @@ export class Game {
       // En sala el reloj es el de pared desde `startedAt`, no la suma de dt: asi
       // un F5 (o una pestana en segundo plano) no regala tiempo.
       this.elapsedTime = this.room ? elapsedSince(this.startedAt) : this.elapsedTime + dt;
-      this.hud.updateTime(this.currentCentis());
-      // Niveles con animacion propia (BruteForce) avanzan aca.
-      this.levels[this.currentLevel]?.update?.(dt);
+      const centis = this.currentCentis();
+      this.hud.updateTime(centis);
+      const lvl = this.levels[this.currentLevel];
+      if (lvl) {
+        if (lvl.updateTime) lvl.updateTime(centis);
+        lvl.update?.(dt);
+      }
     }
   }
 

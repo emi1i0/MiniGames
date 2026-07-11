@@ -7,49 +7,41 @@ import { type HackLevel, type LevelContext, mulberry32 } from "./types";
  * A la derecha esta la huella OBJETIVO. A la izquierda una columna de
  * COMPONENTES: la huella partida en `SLOTS` franjas horizontales. Cada franja
  * arranca mostrando un candidato al azar; el jugador cicla los candidatos
- * (izq/der) y confirma (Enter) el que coincide con esa franja del objetivo.
- * Acierto -> la franja queda fijada (verde) y se pasa a la siguiente; error ->
- * flash rojo y bloqueo breve. Todas las franjas fijadas = nivel resuelto.
+ * (izq/der) hasta encontrar el que coincide con esa franja del objetivo.
  *
- * Cada candidato es la misma franja pero de una huella distinta, asi que hay que
- * comparar de verdad contra el objetivo (no alcanza con ciclar a lo bruto: cada
- * intento fallido cuesta tiempo, que es justo el score del juego).
+ * En esta versión optimizada estilo GTA V, no se verifica franja por franja ni
+ * se pulsa Enter. El juego pasa automáticamente de nivel en cuanto las 8 franjas
+ * estén alineadas correctamente. Tampoco se dan pistas individuales de acierto/error.
  */
 
 const GRID_W = 60;
-const GRID_H = 84;
-const SLOTS = 6;
-const STRIP_ROWS = GRID_H / SLOTS; // 14
+const GRID_H = 96;
+const SLOTS = 8;
+const STRIP_ROWS = GRID_H / SLOTS; // 12
 const CANDIDATES = 4; // 1 correcto + 3 senuelos
 const CELL = 3; // px por celda en el render
-const THRESH = 0.1; // umbral de cresta (más alto = crestas más finas)
-const WRONG_LOCK_MS = 750;
+const THRESH = 0.15; // umbral de cresta (más alto = crestas más finas)
 const COLOR = "#33ff88";
-const ACTIVE_COLOR = "#e6fff1"; // franja en foco: casi blanca, como la referencia
-const DIM_COLOR = "rgba(51,255,136,0.3)";
+const ACTIVE_COLOR = "#ffffff"; // franja en foco: blanca pura
+const DIM_COLOR = "rgba(51, 255, 136, 0.35)"; // más brillante para mejor legibilidad
 
 type Fingerprint = Uint8Array; // GRID_W * GRID_H, 1 = cresta
 
-/**
- * Genera una huella con crestas fluidas tipo "loop": anillos ovalados
- * concentricos alrededor de un nucleo, girados y deformados organicamente. A
- * diferencia del ruido en bloques anterior, las crestas quedan continuas y con
- * espaciado parejo, que es lo que hace que se lea como una huella de verdad.
- */
+/** Genera una huella con crestas fluidas tipo "loop" */
 function makeFingerprint(seed: number): Fingerprint {
   const r = mulberry32(seed);
   const cx = GRID_W * (0.4 + 0.2 * r());
-  const cy = GRID_H * (0.3 + 0.16 * r()); // nucleo hacia arriba (loop abre abajo)
-  const freq = 1.25 + 0.4 * r(); // densidad de crestas
-  const stretchX = 0.85 + 0.25 * r();
+  const cy = GRID_H * (0.3 + 0.16 * r()); // nucleo hacia arriba
+  const freq = 1.2 + 0.4 * r(); // densidad de crestas
+  const stretchX = 0.8 + 0.25 * r();
   const stretchY = 0.44 + 0.18 * r(); // ovalo estirado en vertical
   const twist = (r() - 0.5) * 1.5; // giro tipo whorl
-  const warpAmp = 1.9 + 1.1 * r();
-  const warpFx = 0.09 + 0.05 * r();
+  const warpAmp = 1.8 + 1.1 * r();
+  const warpFx = 0.08 + 0.05 * r();
   const warpFy = 0.08 + 0.05 * r();
   const warpPh = r() * Math.PI * 2;
   const warpPh2 = r() * Math.PI * 2;
-  const tilt = (r() - 0.5) * 0.3; // deriva global que inclina el patron
+  const tilt = (r() - 0.5) * 0.35; // deriva global que inclina el patron
   const phase0 = r() * Math.PI * 2;
 
   const out = new Uint8Array(GRID_W * GRID_H);
@@ -59,11 +51,10 @@ function makeFingerprint(seed: number): Fingerprint {
       const dy = (y - cy) * stretchY;
       const rad = Math.hypot(dx, dy);
       const ang = Math.atan2(dy, dx);
-      // Warp de dominio en dos ejes: rompe la simetria de "anillos de arbol".
       const warp =
         Math.sin(x * warpFx + y * 0.03 + warpPh) * warpAmp +
         Math.cos(y * warpFy - x * 0.02 + warpPh2) * warpAmp;
-      const phase = rad * freq + ang * twist + warp * 0.6 + x * tilt + phase0;
+      const phase = rad * freq + ang * twist + warp * 0.65 + x * tilt + phase0;
       out[y * GRID_W + x] = Math.sin(phase) > THRESH ? 1 : 0;
     }
   }
@@ -90,6 +81,23 @@ function drawBand(
   }
 }
 
+/** Dibuja un mini fingerprint en los signal boxes */
+function drawMiniFingerprint(canvas: HTMLCanvasElement, color: string): void {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = color;
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  
+  for (let r = 4; r < 28; r += 4) {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, r * 0.55, r * 0.85, 0.1, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+}
+
 interface Slot {
   el: HTMLDivElement;
   canvas: HTMLCanvasElement;
@@ -102,17 +110,19 @@ interface Slot {
 export class FingerprintLevel implements HackLevel {
   readonly id = "fingerprint";
   readonly title = "CLON DE HUELLA";
-  readonly controls = "Flechas para elegir franja y ciclar candidatos. Enter fija la que coincide con el objetivo.";
+  readonly controls = "Flechas para elegir franja y ciclar candidatos. El nivel pasa automáticamente al coincidir todo.";
 
   private targetCanvas!: HTMLCanvasElement;
   private slotList!: HTMLDivElement;
+  private timeoutEl!: HTMLDivElement;
+  private scrambleBar!: HTMLDivElement;
   private signalEls: HTMLDivElement[] = [];
   private slots: Slot[] = [];
   private active = 0;
   private target!: Fingerprint;
   private busy = false;
-  private wrongTimer: number | null = null;
   private readonly ctx: LevelContext;
+  private scrambleTimer = 0;
 
   constructor(ctx: LevelContext) {
     this.ctx = ctx;
@@ -121,68 +131,119 @@ export class FingerprintLevel implements HackLevel {
   mount(host: HTMLElement): void {
     host.innerHTML = "";
 
-    const wrap = document.createElement("div");
-    wrap.className = "fp";
+    const container = document.createElement("div");
+    container.className = "fp-layout-container";
 
-    // --- Columna izquierda: señales + componentes ---
-    const left = document.createElement("div");
-    left.className = "fp__col fp__components";
+    // --- Header Grid ---
+    const headerGrid = document.createElement("div");
+    headerGrid.className = "fp-header-grid";
 
-    const sigHead = document.createElement("div");
-    sigHead.className = "fp__head";
-    sigHead.textContent = "SENALES DESCIFRADAS";
+    // Panel Timeout
+    const panelTimeout = document.createElement("div");
+    panelTimeout.className = "fp-panel fp-panel--timeout";
+    const timeoutHead = document.createElement("div");
+    timeoutHead.className = "fp__head";
+    timeoutHead.textContent = "CONNECTION TIMEOUT";
+    this.timeoutEl = document.createElement("div");
+    this.timeoutEl.className = "fp-timeout-val";
+    this.timeoutEl.textContent = "04:00:00";
+    
+    const scrambleHead = document.createElement("div");
+    scrambleHead.className = "fp__head";
+    scrambleHead.textContent = "SCRAMBLE COUNTDOWN";
+    const scrambleCountdown = document.createElement("div");
+    scrambleCountdown.className = "fp-scramble-countdown";
+    this.scrambleBar = document.createElement("div");
+    this.scrambleBar.className = "fp-scramble-bar";
+    scrambleCountdown.appendChild(this.scrambleBar);
+    
+    panelTimeout.append(timeoutHead, this.timeoutEl, scrambleHead, scrambleCountdown);
+
+    // Panel Signals
+    const panelSignals = document.createElement("div");
+    panelSignals.className = "fp-panel fp-panel--signals";
+    const signalsHead = document.createElement("div");
+    signalsHead.className = "fp__head";
+    signalsHead.textContent = "DECYPHERED SIGNALS";
     const signals = document.createElement("div");
     signals.className = "fp__signals";
+    
     this.signalEls = [];
-    for (let i = 0; i < SLOTS; i++) {
-      const dot = document.createElement("div");
-      dot.className = "fp__signal";
-      signals.appendChild(dot);
-      this.signalEls.push(dot);
+    for (let i = 0; i < 4; i++) {
+      const sigBox = document.createElement("div");
+      sigBox.className = "fp__signal";
+      const canvas = document.createElement("canvas");
+      canvas.width = 44;
+      canvas.height = 60;
+      sigBox.appendChild(canvas);
+      signals.appendChild(sigBox);
+      this.signalEls.push(sigBox);
+      
+      if (i < 3) {
+        sigBox.classList.add("is-on");
+        drawMiniFingerprint(canvas, "#33ff88");
+      } else {
+        sigBox.classList.add("fp__signal--active-slot");
+        drawMiniFingerprint(canvas, "rgba(255, 255, 255, 0.4)");
+      }
     }
+    panelSignals.append(signalsHead, signals);
+    headerGrid.append(panelTimeout, panelSignals);
 
+    // --- Body Grid ---
+    const bodyGrid = document.createElement("div");
+    bodyGrid.className = "fp-body-grid";
+
+    // Panel Components
+    const panelComponents = document.createElement("div");
+    panelComponents.className = "fp-panel fp-panel--components";
     const compHead = document.createElement("div");
     compHead.className = "fp__head";
-    compHead.textContent = "COMPONENTES";
-    const slotList = document.createElement("div");
-    slotList.className = "fp__slots";
+    compHead.textContent = "COMPONENTS";
+    this.slotList = document.createElement("div");
+    this.slotList.className = "fp__slots";
+    panelComponents.append(compHead, this.slotList);
 
-    left.append(sigHead, signals, compHead, slotList);
-
-    // --- Columna derecha: objetivo ---
-    const right = document.createElement("div");
-    right.className = "fp__col fp__target";
-    const rightHead = document.createElement("div");
-    rightHead.className = "fp__head";
-    rightHead.textContent = "CLON OBJETIVO";
+    // Panel Target
+    const panelTarget = document.createElement("div");
+    panelTarget.className = "fp-panel fp-panel--target";
+    const targetHead = document.createElement("div");
+    targetHead.className = "fp__head";
+    targetHead.textContent = "CLONE TARGET";
+    
+    const targetCanvasContainer = document.createElement("div");
+    targetCanvasContainer.className = "fp__target-canvas-container";
+    
     this.targetCanvas = document.createElement("canvas");
     this.targetCanvas.width = GRID_W * CELL;
     this.targetCanvas.height = GRID_H * CELL;
     this.targetCanvas.className = "fp__target-canvas";
-    right.append(rightHead, this.targetCanvas);
+    targetCanvasContainer.appendChild(this.targetCanvas);
+    panelTarget.append(targetHead, targetCanvasContainer);
 
-    wrap.append(left, right);
-    host.appendChild(wrap);
+    bodyGrid.append(panelComponents, panelTarget);
 
-    this.slotList = slotList;
+    container.append(headerGrid, bodyGrid);
+    host.appendChild(container);
   }
 
   begin(): void {
-    this.clearWrongTimer();
     this.busy = false;
     this.active = 0;
     this.slots = [];
+    this.scrambleTimer = 0;
     this.slotList.innerHTML = "";
 
     const baseSeed = (Math.random() * 1e9) >>> 0;
     this.target = makeFingerprint(baseSeed);
-    // Huellas senuelo: una por candidato-extra, compartidas por todas las franjas.
+    
     const decoys: Fingerprint[] = [];
-    for (let i = 0; i < CANDIDATES - 1; i++) decoys.push(makeFingerprint(baseSeed + 101 + i * 977));
+    for (let i = 0; i < CANDIDATES - 1; i++) {
+      decoys.push(makeFingerprint(baseSeed + 101 + i * 977));
+    }
 
     for (let s = 0; s < SLOTS; s++) {
       const pool = [this.target, ...decoys];
-      // Barajar y recordar donde quedo el correcto (el objetivo).
       const order = pool.map((_, i) => i);
       for (let i = order.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -217,28 +278,61 @@ export class FingerprintLevel implements HackLevel {
       this.slots.push(slot);
 
       const idx = s;
-      prev.addEventListener("click", () => {
+      prev.addEventListener("click", (e) => {
+        e.stopPropagation();
         this.setActive(idx);
         this.cycle(-1);
       });
-      next.addEventListener("click", () => {
+      next.addEventListener("click", (e) => {
+        e.stopPropagation();
         this.setActive(idx);
         this.cycle(1);
       });
-      // Click sobre la franja = confirmar el candidato mostrado (ideal para touch).
       canvas.addEventListener("click", () => {
         this.setActive(idx);
-        this.confirm();
       });
     }
 
-    // El objetivo es la huella entera (las 6 franjas seguidas).
     drawBand(this.targetCanvas, this.target, 0, GRID_H, COLOR);
 
-    this.signalEls.forEach((d) => d.classList.remove("is-on"));
+    // Reiniciar los signal boxes
+    this.signalEls.forEach((box, i) => {
+      const canv = box.querySelector("canvas");
+      if (canv) {
+        if (i < 3) {
+          box.className = "fp__signal is-on";
+          drawMiniFingerprint(canv, "#33ff88");
+        } else {
+          box.className = "fp__signal fp__signal--active-slot";
+          drawMiniFingerprint(canv, "rgba(255, 255, 255, 0.4)");
+        }
+      }
+    });
+
     this.slots.forEach((_, i) => this.renderSlot(i));
     this.setActive(0);
     this.updateStatus();
+  }
+
+  update(dt: number): void {
+    // SCRAMBLE COUNTDOWN bar drains every 8 seconds just for a retro visual effect
+    this.scrambleTimer = (this.scrambleTimer + dt) % 8;
+    if (this.scrambleBar) {
+      const pct = 100 - (this.scrambleTimer / 8) * 100;
+      this.scrambleBar.style.width = `${pct}%`;
+    }
+  }
+
+  updateTime(centis: number): void {
+    if (this.timeoutEl) {
+      // 4 minutes limit (24000 centiseconds)
+      const limit = 24000;
+      const remaining = Math.max(0, limit - centis);
+      const min = Math.floor(remaining / 6000);
+      const sec = Math.floor((remaining % 6000) / 100);
+      const cs = remaining % 100;
+      this.timeoutEl.textContent = `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}:${cs.toString().padStart(2, "0")}`;
+    }
   }
 
   private renderSlot(i: number): void {
@@ -250,21 +344,16 @@ export class FingerprintLevel implements HackLevel {
   }
 
   private setActive(i: number): void {
-    if (this.slots[i]?.locked) return;
+    if (this.busy) return;
     const prev = this.active;
     this.active = i;
     if (prev !== i) this.renderSlot(prev);
     this.renderSlot(i);
+    this.updateStatus();
   }
 
-  /** Mueve el foco a la siguiente franja sin fijar (dir +1 / -1), salteando fijadas. */
   private moveActive(dir: number): void {
-    if (this.slots.every((s) => s.locked)) return;
-    let i = this.active;
-    for (let n = 0; n < SLOTS; n++) {
-      i = (i + dir + SLOTS) % SLOTS;
-      if (!this.slots[i].locked) break;
-    }
+    let i = (this.active + dir + SLOTS) % SLOTS;
     this.setActive(i);
     SoundEffects.playMove();
   }
@@ -272,51 +361,43 @@ export class FingerprintLevel implements HackLevel {
   private cycle(dir: number): void {
     if (this.busy) return;
     const slot = this.slots[this.active];
-    if (!slot || slot.locked) return;
+    if (!slot) return;
     slot.current = (slot.current + dir + CANDIDATES) % CANDIDATES;
     this.renderSlot(this.active);
     SoundEffects.playCycle();
+    this.checkSolved();
   }
 
-  private confirm(): void {
-    if (this.busy) return;
-    const slot = this.slots[this.active];
-    if (!slot || slot.locked) return;
-
-    if (slot.current === slot.correct) {
-      slot.locked = true;
-      this.renderSlot(this.active);
-      this.signalEls[this.active]?.classList.add("is-on");
+  private checkSolved(): void {
+    const isAllCorrect = this.slots.every((s) => s.current === s.correct);
+    if (isAllCorrect) {
+      this.busy = true; // bloquear clicks/teclas
+      
+      // Bloquear visualmente en verde para dar la respuesta final correcta
+      this.slots.forEach((s, i) => {
+        s.locked = true;
+        this.renderSlot(i);
+      });
+      
       SoundEffects.playLock();
       this.ctx.onProgress();
-      this.updateStatus();
-      if (this.slots.every((s) => s.locked)) {
+      
+      // Enciende el 4º signal
+      const lastBox = this.signalEls[3];
+      if (lastBox) {
+        lastBox.className = "fp__signal is-on";
+        const canv = lastBox.querySelector("canvas");
+        if (canv) drawMiniFingerprint(canv, "#33ff88");
+      }
+      
+      window.setTimeout(() => {
         this.ctx.onSolved();
-        return;
-      }
-      // Enfocar la siguiente franja sin fijar.
-      let i = this.active;
-      for (let n = 0; n < SLOTS; n++) {
-        i = (i + 1) % SLOTS;
-        if (!this.slots[i].locked) break;
-      }
-      this.setActive(i);
-    } else {
-      // Error: flash rojo y bloqueo breve (el tiempo corre, asi que cuesta).
-      SoundEffects.playError();
-      this.busy = true;
-      slot.el.classList.add("is-wrong");
-      this.wrongTimer = window.setTimeout(() => {
-        slot.el.classList.remove("is-wrong");
-        this.busy = false;
-        this.wrongTimer = null;
-      }, WRONG_LOCK_MS);
+      }, 600);
     }
   }
 
   private updateStatus(): void {
-    const done = this.slots.filter((s) => s.locked).length;
-    this.ctx.setStatus(`COMPONENTES ${done}/${SLOTS}`);
+    this.ctx.setStatus(`FRANJA ACTIVA ${this.active + 1}/${SLOTS}`);
   }
 
   handleKey(e: KeyboardEvent): void {
@@ -341,22 +422,8 @@ export class FingerprintLevel implements HackLevel {
       case "D":
         this.cycle(1);
         break;
-      case "Enter":
-      case " ":
-        e.preventDefault();
-        this.confirm();
-        break;
     }
   }
 
-  private clearWrongTimer(): void {
-    if (this.wrongTimer !== null) {
-      clearTimeout(this.wrongTimer);
-      this.wrongTimer = null;
-    }
-  }
-
-  destroy(): void {
-    this.clearWrongTimer();
-  }
+  destroy(): void {}
 }

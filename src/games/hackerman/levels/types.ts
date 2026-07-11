@@ -37,6 +37,8 @@ export interface HackLevel {
   update?(dt: number): void;
   /** Input de teclado (solo se llama mientras el nivel esta activo). */
   handleKey(e: KeyboardEvent): void;
+  /** Permite sincronizar y mostrar el tiempo acumulado de la corrida dentro de la interfaz del nivel. */
+  updateTime?(centis: number): void;
   /** Libera timers / listeners propios. El DOM lo limpia `Game` vaciando el host. */
   destroy(): void;
 }
